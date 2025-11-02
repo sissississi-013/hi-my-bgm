@@ -114,8 +114,7 @@
   bubble.innerHTML = `
     <div class="hmb-bubble neutral" id="hmb-bubble" aria-label="Focus companion planet" tabindex="0">
       <div class="hmb-halo" id="hmb-halo" aria-hidden="true"></div>
-      <div class="hmb-planet-container planet-has-css" id="hmb-planet-container">
-        <div class="planet-css-fallback" id="hmb-planet-fallback" aria-hidden="true"></div>
+      <div class="hmb-planet-container" id="hmb-planet-container">
         <div class="hmb-planet-glow" aria-hidden="true"></div>
         <div class="hmb-planet-glass" aria-hidden="true"></div>
         <svg
