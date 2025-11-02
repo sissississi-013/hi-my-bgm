@@ -240,14 +240,15 @@ export class PlanetBubble {
 
     if (!this.gl) {
       console.warn('[Planet] WebGL not available, falling back to CSS');
-      this.useWebGL = false;
-      this.container.classList.remove('planet-has-webgl');
-      this.initCSS();
+      this.fallbackToCSS('context-missing');
       return;
     }
 
     // Compile shader
-    this.setupShader();
+    if (!this.setupShader()) {
+      this.fallbackToCSS('shader-error');
+      return;
+    }
 
     // Start render loop
     this.startAnimation();
@@ -255,6 +256,9 @@ export class PlanetBubble {
 
   setupShader() {
     const gl = this.gl;
+    if (!gl) {
+      return false;
+    }
 
     // Vertex shader (simple quad)
     const vertexShaderSource = `
@@ -268,6 +272,12 @@ export class PlanetBubble {
     gl.shaderSource(vertexShader, vertexShaderSource);
     gl.compileShader(vertexShader);
 
+    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+      console.error('[Planet] Vertex shader compile error:', gl.getShaderInfoLog(vertexShader));
+      gl.deleteShader(vertexShader);
+      return false;
+    }
+
     // Fragment shader
     const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
     gl.shaderSource(fragmentShader, PLANET_SHADER);
@@ -275,7 +285,9 @@ export class PlanetBubble {
 
     if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
       console.error('[Planet] Shader compile error:', gl.getShaderInfoLog(fragmentShader));
-      return;
+      gl.deleteShader(vertexShader);
+      gl.deleteShader(fragmentShader);
+      return false;
     }
 
     // Link program
@@ -286,10 +298,19 @@ export class PlanetBubble {
 
     if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
       console.error('[Planet] Program link error:', gl.getProgramInfoLog(this.program));
-      return;
+      gl.deleteProgram(this.program);
+      this.program = null;
+      gl.deleteShader(vertexShader);
+      gl.deleteShader(fragmentShader);
+      return false;
     }
 
     gl.useProgram(this.program);
+
+    gl.detachShader(this.program, vertexShader);
+    gl.detachShader(this.program, fragmentShader);
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
 
     // Setup geometry (fullscreen quad)
     const positions = new Float32Array([
@@ -320,6 +341,7 @@ export class PlanetBubble {
 
     // Set resolution
     gl.uniform2f(this.uniforms.uResolution, this.canvas.width, this.canvas.height);
+    return true;
   }
 
   initCSS() {
@@ -337,7 +359,42 @@ export class PlanetBubble {
     }
     this.container.classList.remove('planet-has-webgl');
     this.container.classList.add('planet-has-css');
+    this.useWebGL = false;
     this.canvas = planet; // Store reference
+  }
+
+  fallbackToCSS(reason = 'unknown') {
+    if (this.animationFrame) {
+      cancelAnimationFrame(this.animationFrame);
+      this.animationFrame = null;
+    }
+
+    if (this.container) {
+      this.container.classList.remove('planet-has-webgl');
+    }
+
+    if (this.canvas && this.canvas.parentNode === this.container && this.canvas.tagName === 'CANVAS') {
+      this.container.removeChild(this.canvas);
+    }
+
+    if (this.gl) {
+      try {
+        const ext = this.gl.getExtension('WEBGL_lose_context');
+        if (ext) {
+          ext.loseContext();
+        }
+      } catch (err) {
+        console.warn('[Planet] Unable to release WebGL context cleanly:', err);
+      }
+    }
+
+    this.gl = null;
+    this.program = null;
+    this.uniforms = {};
+    this.useWebGL = false;
+
+    console.warn(`[Planet] Falling back to CSS (${reason})`);
+    this.initCSS();
   }
 
   startAnimation() {
