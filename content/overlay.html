@@ -11,11 +11,27 @@
   </style>
 </head>
 <body>
+  <!-- Include face SVG definitions -->
+  <div style="display: none;">
+    <!-- Faces SVG will be loaded and inserted here -->
+  </div>
+
   <div id="hmb-root" class="hmb-root" aria-live="polite" role="status">
-    <div class="hmb-bubble neutral" id="hmb-bubble" aria-label="Focus companion bubble">
-      <div class="hmb-face" id="hmb-face" aria-hidden="true"></div>
+    <div class="hmb-bubble neutral" id="hmb-bubble" aria-label="Focus companion planet">
+      <!-- Planet canvas/fallback will be inserted here by JS -->
+      <div class="hmb-planet-container" id="hmb-planet-container"></div>
+
+      <!-- SVG Face overlay -->
+      <div class="hmb-face" id="hmb-face" aria-hidden="true">
+        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+          <use id="hmb-face-use" href="#face-neutral" />
+        </svg>
+      </div>
+
+      <!-- Halo ring -->
       <div class="hmb-halo" id="hmb-halo" aria-hidden="true"></div>
     </div>
+
     <div class="hmb-status" id="hmb-status">neutral</div>
   </div>
 </body>

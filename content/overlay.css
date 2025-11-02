@@ -1,7 +1,19 @@
 /**
- * overlay.css - Bubble UI styling
- * Floating 60px circle, bottom-right, non-intrusive
+ * overlay.css - Planet Bubble UI styling
+ * Flowing WebGL planet with line-art face, premium futuristic design
  */
+
+:root {
+  --bg: #0b0b0f;
+  --panel: #15151c;
+  --text: #f5f5f7;
+  --pink: #ff4ecd;
+  --orange: #ff7849;
+  --cyan: #1fb6ff;
+  --green: #22c55e;
+  --radius: 16px;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
 
 .hmb-root {
   position: fixed;
@@ -12,105 +24,144 @@
   pointer-events: none;
 }
 
+/* Main planet container */
 .hmb-bubble {
   position: relative;
-  width: 60px;
-  height: 60px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: default;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(var(--shadow));
   pointer-events: auto;
 }
 
-/* State colors */
-.hmb-bubble.focused {
-  background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);
+.hmb-bubble:hover {
+  transform: scale(1.08);
 }
 
-.hmb-bubble.neutral {
-  background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
+/* Planet canvas (WebGL) */
+.planet-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  pointer-events: none;
 }
 
-.hmb-bubble.distracted {
-  background: linear-gradient(135deg, #ff5722 0%, #e64a19 100%);
+/* CSS fallback planet (no WebGL or reduced motion) */
+.planet-css-fallback {
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #9e9e9e, #757575);
+  box-shadow:
+    inset 0 0 20px rgba(255, 255, 255, 0.1),
+    0 0 30px rgba(0, 0, 0, 0.3);
+  transition: background 0.6s ease;
+  pointer-events: none;
 }
 
-.hmb-bubble.idle {
-  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+/* State-specific CSS fallback colors */
+.hmb-bubble.focused .planet-css-fallback {
+  background: radial-gradient(circle at 30% 30%, #1fb6ff, #00bcd4);
 }
 
-/* Face emoji */
+.hmb-bubble.neutral .planet-css-fallback {
+  background: radial-gradient(circle at 30% 30%, #9e9e9e, #757575);
+}
+
+.hmb-bubble.distracted .planet-css-fallback {
+  background: radial-gradient(circle at 30% 30%, #ff7849, #ff4ecd);
+}
+
+.hmb-bubble.idle .planet-css-fallback {
+  background: radial-gradient(circle at 30% 30%, #22c55e, #4caf50);
+}
+
+.hmb-bubble.upbeat .planet-css-fallback {
+  background: radial-gradient(circle at 30% 30%, #ff4ecd, #1fb6ff);
+}
+
+/* Face overlay (SVG line art) */
 .hmb-face {
-  font-size: 32px;
-  line-height: 1;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
   z-index: 2;
-  position: relative;
+  opacity: 0.95;
+  transition: opacity 0.3s ease;
 }
 
-.hmb-bubble.focused .hmb-face::before {
-  content: '😄';
+.hmb-face svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
 
-.hmb-bubble.neutral .hmb-face::before {
-  content: '😐';
+/* Face state transitions */
+.hmb-face.transitioning {
+  opacity: 0;
 }
 
-.hmb-bubble.distracted .hmb-face::before {
-  content: '😟';
-}
-
-.hmb-bubble.idle .hmb-face::before {
-  content: '😴';
-}
-
-/* Halo animation */
+/* Halo ring (only visible when music playing) */
 .hmb-halo {
   position: absolute;
-  top: -5px;
-  left: -5px;
-  right: -5px;
-  bottom: -5px;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  bottom: -8px;
   border-radius: 50%;
   border: 2px solid currentColor;
-  opacity: 0.3;
+  opacity: 0;
   z-index: 1;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
-/* Halo animations for different states */
+/* Halo animations for different states (only when playing) */
+.hmb-bubble.playing .hmb-halo {
+  opacity: 0.4;
+}
+
 .hmb-bubble.playing.focused .hmb-halo {
-  animation: pulseSteady 1s ease-in-out infinite;
-  color: #00bcd4;
+  animation: pulseSteady 1.0s ease-in-out infinite;
+  color: var(--cyan);
 }
 
 .hmb-bubble.playing.neutral .hmb-halo {
-  animation: pulseSlow 2s ease-in-out infinite;
+  animation: pulseSlow 1.4s ease-in-out infinite;
   color: #9e9e9e;
 }
 
 .hmb-bubble.playing.distracted .hmb-halo {
-  animation: pulseSeek 0.8s ease-in-out infinite;
-  color: #ff5722;
+  animation: pulseSeek 0.9s ease-in-out infinite;
+  color: var(--orange);
 }
 
 .hmb-bubble.playing.idle .hmb-halo {
-  animation: pulseSlow 3s ease-in-out infinite;
-  color: #4caf50;
+  animation: pulseSlow 1.6s ease-in-out infinite;
+  color: var(--green);
 }
 
-/* Keyframe animations */
+.hmb-bubble.playing.upbeat .hmb-halo {
+  animation: pulseSteady 0.9s ease-in-out infinite;
+  color: var(--pink);
+}
+
+/* Keyframe animations for halo */
 @keyframes pulseSteady {
   0%, 100% {
     transform: scale(1);
     opacity: 0.3;
   }
   50% {
-    transform: scale(1.2);
+    transform: scale(1.15);
     opacity: 0.6;
   }
 }
@@ -121,7 +172,7 @@
     opacity: 0.2;
   }
   50% {
-    transform: scale(1.15);
+    transform: scale(1.12);
     opacity: 0.4;
   }
 }
@@ -132,46 +183,73 @@
     opacity: 0.4;
   }
   50% {
-    transform: scale(1.25) rotate(180deg);
+    transform: scale(1.2) rotate(180deg);
     opacity: 0.7;
+  }
+}
+
+/* Beat pulse (when audio reactive) */
+.hmb-bubble.beating {
+  animation: beatPulse 0.15s ease-out;
+}
+
+@keyframes beatPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 
 /* Status text (hidden by default, shown on hover) */
 .hmb-status {
   position: absolute;
-  bottom: 70px;
+  bottom: 82px;
   right: 0;
-  background: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 6px 12px;
-  border-radius: 6px;
+  background: rgba(11, 11, 15, 0.92);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 8px;
   font-size: 12px;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .hmb-root:hover .hmb-status {
   opacity: 1;
 }
 
-/* Hover effects */
-.hmb-bubble:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
-}
-
-/* Accessibility */
+/* Accessibility - Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
   .hmb-bubble,
   .hmb-halo,
-  .hmb-status {
+  .hmb-status,
+  .hmb-face {
     animation: none !important;
     transition: none !important;
+  }
+
+  .hmb-bubble:hover {
+    transform: none;
+  }
+
+  /* Disable shader animation, use static gradient */
+  .planet-canvas {
+    display: none;
+  }
+
+  .planet-css-fallback {
+    display: block !important;
   }
 }
 
@@ -180,4 +258,34 @@
   .hmb-bubble {
     border: 2px solid currentColor;
   }
+
+  .hmb-face {
+    opacity: 1;
+  }
+
+  .hmb-status {
+    border-width: 2px;
+    background: var(--bg);
+  }
+}
+
+/* Dark mode adjustments (most systems) */
+@media (prefers-color-scheme: dark) {
+  .hmb-status {
+    background: rgba(21, 21, 28, 0.95);
+  }
+}
+
+/* Glossy effect overlay (optional enhancement) */
+.hmb-bubble::after {
+  content: '';
+  position: absolute;
+  top: 8%;
+  left: 15%;
+  width: 35%;
+  height: 35%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.25), transparent 60%);
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.6;
 }
