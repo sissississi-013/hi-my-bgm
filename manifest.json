@@ -42,11 +42,14 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "content/overlay.html",
-        "content/expressions.svg",
-        "content/faces.svg",
-        "content/planet-bubble.js",
-        "content/audio-analyzer.js"
+        "content/*.js",
+        "content/*.css",
+        "content/*.html",
+        "content/*.svg",
+        "lib/*.js",
+        "music/*.js",
+        "voice/*.js",
+        "ai/*.js"
       ],
       "matches": ["<all_urls>"]
     }
