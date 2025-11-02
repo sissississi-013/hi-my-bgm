@@ -136,9 +136,14 @@
   async function handleToggleMusic() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
+    console.log('[HMB:popup] Toggle music clicked, tab:', tab);
+
     // Check if we can communicate with this tab
-    if (!tab || !canRunOnTab(tab)) {
-      alert('Music controls not available on this page. Please open a regular website.');
+    if (!canRunOnTab(tab)) {
+      const msg = tab && tab.url
+        ? `Not available on ${new URL(tab.url).protocol} pages`
+        : 'Not available on this page';
+      alert(`Music controls not available. ${msg}\n\nPlease open a regular website (http:// or https://)`);
       return;
     }
 
@@ -150,11 +155,17 @@
       });
       updateUI();
     } catch (err) {
-      console.warn('[HMB:popup] Could not send message to content script:', err);
+      console.error('[HMB:popup] Failed to send message:', err);
       // Revert state if failed
       isPlaying = !isPlaying;
       updateUI();
-      stateMessage.textContent = 'Error: Please refresh the page and try again';
+
+      // Show more helpful error message
+      if (err.message && err.message.includes('Receiving end does not exist')) {
+        stateMessage.textContent = 'Bubble not loaded. Please refresh the page (F5) and try again.';
+      } else {
+        stateMessage.textContent = 'Error: ' + (err.message || 'Please refresh the page');
+      }
     }
   }
 
@@ -169,8 +180,11 @@
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     // Check if we can communicate with this tab
-    if (!tab || !canRunOnTab(tab)) {
-      alert('Mode controls not available on this page. Please open a regular website.');
+    if (!canRunOnTab(tab)) {
+      const msg = tab && tab.url
+        ? `Not available on ${new URL(tab.url).protocol} pages`
+        : 'Not available on this page';
+      alert(`Mode controls not available. ${msg}\n\nPlease open a regular website (http:// or https://)`);
       // Reset to auto
       document.querySelector('input[value="auto"]').checked = true;
       return;
@@ -182,8 +196,12 @@
         payload: { mode }
       });
     } catch (err) {
-      console.warn('[HMB:popup] Could not set mode:', err);
-      stateMessage.textContent = 'Error: Please refresh the page and try again';
+      console.error('[HMB:popup] Could not set mode:', err);
+      if (err.message && err.message.includes('Receiving end does not exist')) {
+        stateMessage.textContent = 'Bubble not loaded. Please refresh the page (F5) and try again.';
+      } else {
+        stateMessage.textContent = 'Error: ' + (err.message || 'Please refresh the page');
+      }
     }
   }
 
@@ -198,11 +216,19 @@
    * Content scripts are restricted on chrome://, chrome-extension://, and other special pages
    */
   function canRunOnTab(tab) {
-    if (!tab || !tab.url) {
+    if (!tab) {
+      console.log('[HMB:popup] No tab object');
       return false;
     }
 
+    if (!tab.url) {
+      console.log('[HMB:popup] Tab URL not available, assuming it\'s OK to try');
+      // If we can't read the URL, assume it's a regular page and let the try/catch handle it
+      return true;
+    }
+
     const url = tab.url.toLowerCase();
+    console.log('[HMB:popup] Checking URL:', url);
 
     // Restricted URL schemes
     const restrictedSchemes = [
@@ -219,15 +245,18 @@
     // Check if URL starts with any restricted scheme
     for (const scheme of restrictedSchemes) {
       if (url.startsWith(scheme)) {
+        console.log('[HMB:popup] Blocked restricted scheme:', scheme);
         return false;
       }
     }
 
     // Chrome Web Store is also restricted
     if (url.includes('chrome.google.com/webstore')) {
+      console.log('[HMB:popup] Blocked Chrome Web Store');
       return false;
     }
 
+    console.log('[HMB:popup] URL is OK');
     return true;
   }
 
