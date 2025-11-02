@@ -45,7 +45,7 @@ export async function init() {
   console.log('[HMB:spotify] Spotify adapter stub (not implemented)');
 }
 
-export async function play(mode) {
+export async function play(mode, _options = {}) {
   if (!player || !accessToken) {
     console.warn('[HMB:spotify] Player not initialized');
     return;

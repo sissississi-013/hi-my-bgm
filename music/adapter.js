@@ -4,71 +4,306 @@
  */
 
 import * as Sponsor from '../lib/sponsor.js';
+import { fusePrompt } from '../lib/prompt-fusion.js';
+import { getPageContext } from '../lib/page-context.js';
+import { extractCues } from '../lib/text-cues.js';
 import YouTubeAdapter from './youtube.js';
 import SpotifyAdapter from './spotify.js';
-import AIOpenAIAdapter from './ai-openai.js';
+import * as MusicHero from './musichero.js';
 
-let currentAdapter = null;
+let baselineAdapter = null;
+let configCache = null;
+let overlayAudio = null;
+let currentMode = null;
+let overlayUrl = '';
+let overlayNeedsGesture = false;
+let overlayGestureHandler = null;
 
-/**
- * Initialize the music adapter based on configuration
- */
-export async function init() {
-  const config = await Sponsor.loadConfig();
+const overlayCache = new Map();
+const CACHE_TTL_MS = 15 * 60 * 1000;
+const OVERLAY_TARGET_VOLUME = 0.35;
 
-  // Priority: Spotify > YouTube (default)
+function preview(value = '', limit = 120) {
+  return value.replace(/\s+/g, ' ').trim().slice(0, limit);
+}
+
+function hashString(input = '') {
+  let hash = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = ((hash << 5) - hash) + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash.toString(16);
+}
+
+function buildPageSignature(page = {}) {
+  const raw = `${page.host || 'unknown'}|${preview(page.title || '', 80)}|${preview(page.snippet || '', 160)}`;
+  return hashString(raw);
+}
+
+function buildCuesKey(cues = {}) {
+  if (!cues) return 'none';
+  const sleepPart = typeof cues.sleepHours === 'number' ? cues.sleepHours : 'na';
+  return `${cues.mood || 'none'}-${sleepPart}`;
+}
+
+async function ensureConfig() {
+  configCache = await Sponsor.loadConfig();
+  return configCache;
+}
+
+async function ensureAdapter() {
+  const config = await ensureConfig();
+
+  if (baselineAdapter) {
+    return { adapter: baselineAdapter, config };
+  }
+
   if (config.HMB_USE_SPOTIFY && config.SPOTIFY_CLIENT_ID) {
     console.log('[HMB:music] Using Spotify adapter');
-    currentAdapter = SpotifyAdapter;
+    baselineAdapter = SpotifyAdapter;
   } else {
     console.log('[HMB:music] Using YouTube adapter (default)');
-    currentAdapter = YouTubeAdapter;
+    baselineAdapter = YouTubeAdapter;
   }
 
-  await currentAdapter.init();
+  await baselineAdapter.init();
+  return { adapter: baselineAdapter, config };
 }
 
-/**
- * Play music for a specific mode
- * @param {string} mode - 'focus' | 'refocus' | 'calm'
- */
-export async function play(mode) {
-  if (!currentAdapter) {
-    await init();
+function cacheKey({ pageSig, mode, promptHash, cuesKey, instrumental, lyricHook }) {
+  return `${pageSig}:${mode}:${promptHash}:${cuesKey}:${instrumental ? 1 : 0}:${lyricHook || ''}`;
+}
+
+function getCached(key) {
+  const entry = overlayCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expires) {
+    overlayCache.delete(key);
+    return null;
   }
-  return currentAdapter.play(mode);
+  return entry.url;
 }
 
-/**
- * Stop music playback
- */
-export function stop() {
-  if (!currentAdapter) return;
-  return currentAdapter.stop();
+function setCached(key, url) {
+  overlayCache.set(key, { url, expires: Date.now() + CACHE_TTL_MS });
 }
 
-/**
- * Pause music playback
- */
-export function pause() {
-  if (!currentAdapter) return;
-  return currentAdapter.pause();
+function ensureOverlayAudio() {
+  if (!overlayAudio) {
+    overlayAudio = new Audio();
+    overlayAudio.loop = true;
+    overlayAudio.volume = 0;
+    overlayAudio.preload = 'auto';
+    overlayAudio.crossOrigin = 'anonymous';
+    overlayAudio.addEventListener('play', () => {
+      overlayNeedsGesture = false;
+      teardownGestureRetry();
+    });
+  }
+  return overlayAudio;
 }
 
-/**
- * Resume music playback
- */
-export function resume() {
-  if (!currentAdapter) return;
-  return currentAdapter.resume();
+function teardownGestureRetry() {
+  if (typeof document === 'undefined') return;
+  if (!overlayGestureHandler) return;
+  document.removeEventListener('pointerdown', overlayGestureHandler, true);
+  document.removeEventListener('keydown', overlayGestureHandler, true);
+  overlayGestureHandler = null;
 }
 
-/**
- * Get current playback status
- */
+function installGestureRetry(url, config) {
+  if (typeof document === 'undefined') return;
+  if (overlayGestureHandler) return;
+  overlayGestureHandler = () => {
+    teardownGestureRetry();
+    overlayNeedsGesture = false;
+    playOverlay(url, config).catch((err) => {
+      console.warn('[HMB:music] Gesture retry failed:', err);
+    });
+  };
+  document.addEventListener('pointerdown', overlayGestureHandler, true);
+  document.addEventListener('keydown', overlayGestureHandler, true);
+}
+
+async function fadeTo(audio, target, duration = 900) {
+  if (!audio) return;
+
+  const start = audio.volume;
+  const delta = target - start;
+  const startTime = performance.now();
+
+  return new Promise((resolve) => {
+    const step = (now) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      audio.volume = start + delta * progress;
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      } else {
+        resolve();
+      }
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+async function playOverlay(url, config) {
+  if (!url) return;
+  const audio = ensureOverlayAudio();
+
+  if (audio.src !== url) {
+    audio.pause();
+    audio.src = url;
+    overlayUrl = url;
+    audio.volume = 0;
+  }
+
+  try {
+    await audio.play();
+    await fadeTo(audio, config?.MUSICHERO_OVERLAY_VOLUME ?? OVERLAY_TARGET_VOLUME);
+    overlayNeedsGesture = false;
+    teardownGestureRetry();
+  } catch (err) {
+    console.warn('[HMB:music] Overlay playback failed:', err);
+    overlayNeedsGesture = true;
+    installGestureRetry(url, config);
+    throw err;
+  }
+}
+
+async function stopOverlay() {
+  if (!overlayAudio) return;
+  try {
+    await fadeTo(overlayAudio, 0, 400);
+    overlayAudio.pause();
+  } catch (err) {
+    console.warn('[HMB:music] Failed to fade overlay:', err);
+  }
+  overlayNeedsGesture = false;
+  teardownGestureRetry();
+}
+
+export async function init() {
+  await ensureAdapter();
+}
+
+export async function refreshConfig() {
+  configCache = null;
+  baselineAdapter = null;
+  await stopOverlay();
+  overlayUrl = '';
+  await ensureAdapter();
+}
+
+export async function play(mode, context = {}) {
+  const { adapter, config } = await ensureAdapter();
+
+  currentMode = mode;
+  await adapter.play(mode, { forceRestart: Boolean(context.forceRestart) });
+
+  if (!shouldUseMusicHero(config)) {
+    await stopOverlay();
+    return getStatus();
+  }
+
+  const page = context.page || getPageContext();
+  const cues = context.cues || extractCues();
+  const state = context.state || { label: context.label || mode };
+
+  const promptConfig = {
+    instrumentalOnly: config.MUSICHERO_INSTRUMENTAL_ONLY,
+    allowLyric: config.HMB_ALLOW_LYRIC_HOOK,
+    durationSec: config.MUSICHERO_DEFAULT_DURATION || 30
+  };
+
+  const fusion = fusePrompt(state, page, cues, promptConfig);
+  const pageSig = buildPageSignature(page);
+  const promptHash = hashString(`${fusion.prompt}|${state.label || ''}`);
+  const cuesKey = buildCuesKey(cues);
+  const key = cacheKey({
+    pageSig,
+    mode,
+    promptHash,
+    cuesKey,
+    instrumental: fusion.instrumental,
+    lyricHook: fusion.lyricHook
+  });
+
+  let url = getCached(key);
+  if (!url) {
+    try {
+      url = await MusicHero.generateTrack(fusion);
+      setCached(key, url);
+    } catch (err) {
+      console.warn('[HMB:music] MusicHero generation failed:', err.message);
+      return getStatus();
+    }
+  }
+
+  try {
+    await playOverlay(url, config);
+  } catch (err) {
+    // Autoplay restrictions will trigger a retry once the user interacts.
+  }
+
+  return getStatus();
+}
+
+export async function stop() {
+  if (baselineAdapter) {
+    baselineAdapter.stop();
+  }
+  await stopOverlay();
+  overlayUrl = '';
+  currentMode = null;
+}
+
+export async function pause() {
+  if (baselineAdapter && baselineAdapter.pause) {
+    baselineAdapter.pause();
+  }
+  if (overlayAudio) {
+    overlayAudio.pause();
+  }
+  overlayNeedsGesture = false;
+  teardownGestureRetry();
+}
+
+export async function resume() {
+  if (currentMode && baselineAdapter && baselineAdapter.resume) {
+    baselineAdapter.resume();
+  } else if (currentMode) {
+    await play(currentMode);
+  }
+
+  if (overlayAudio && overlayAudio.src) {
+    try {
+      await overlayAudio.play();
+    } catch (err) {
+      console.warn('[HMB:music] Unable to resume overlay:', err);
+    }
+  }
+}
+
 export function getStatus() {
-  if (!currentAdapter) return { isPlaying: false, mode: null };
-  return currentAdapter.getStatus();
+  const baselineStatus = baselineAdapter?.getStatus?.() || { isPlaying: false, mode: null };
+  const overlayPlaying = !!(overlayAudio && !overlayAudio.paused && overlayAudio.currentTime > 0);
+  return {
+    ...baselineStatus,
+    overlayUrl,
+    overlayPlaying,
+    overlayNeedsGesture
+  };
+}
+
+function shouldUseMusicHero(config) {
+  return Boolean(
+    config &&
+    config.HMB_USE_MUSICHERO &&
+    config.MUSICHERO_API_KEY &&
+    config.MUSICHERO_API_URL
+  );
 }
 
 export default {
@@ -77,5 +312,6 @@ export default {
   stop,
   pause,
   resume,
-  getStatus
+  getStatus,
+  refreshConfig
 };

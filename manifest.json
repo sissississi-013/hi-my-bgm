@@ -46,7 +46,9 @@
         "content/expressions.svg",
         "content/faces.svg",
         "content/planet-bubble.js",
-        "content/audio-analyzer.js"
+        "content/audio-analyzer.js",
+        "voice/coach.js",
+        "voice/control.js"
       ],
       "matches": ["<all_urls>"]
     }

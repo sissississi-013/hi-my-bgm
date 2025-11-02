@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,80 +7,72 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="popup-container">
-    <header class="header">
-      <h1 class="title">HI MY BGM</h1>
-      <p class="subtitle">Your focus companion</p>
-    </header>
-
-    <main class="main">
-      <!-- Current State Display -->
-      <section class="state-display">
-        <div class="state-icon" id="state-icon">😐</div>
-        <div class="state-info">
-          <div class="state-label" id="state-label">Neutral</div>
-          <div class="state-message" id="state-message">Finding your rhythm.</div>
-        </div>
-      </section>
-
-      <!-- Controls -->
-      <section class="controls">
-        <button class="btn btn-primary" id="toggle-music">
-          <span class="btn-icon" id="toggle-icon">▶️</span>
-          <span class="btn-text" id="toggle-text">Play</span>
-        </button>
-
-        <button class="btn btn-secondary" id="settings-btn" title="Open Settings">
-          ⚙️
-        </button>
-      </section>
-
-      <!-- Mode Override -->
-      <section class="mode-selector">
-        <label class="label">Mode:</label>
-        <div class="radio-group">
-          <label class="radio-label">
-            <input type="radio" name="mode" value="auto" checked>
-            <span>Auto</span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="mode" value="focus">
-            <span>Focus</span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="mode" value="refocus">
-            <span>Refocus</span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="mode" value="calm">
-            <span>Calm</span>
-          </label>
-        </div>
-      </section>
-
-      <!-- Stats (optional) -->
-      <section class="stats">
-        <div class="stat-item">
-          <span class="stat-label">Tab switches:</span>
-          <span class="stat-value" id="tab-switches">0</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-label">Session time:</span>
-          <span class="stat-value" id="session-time">0m</span>
-        </div>
-      </section>
-    </main>
-
-    <!-- Sponsors Footer -->
-    <footer class="footer">
-      <div class="sponsors">
-        <span class="sponsors-label">Powered by:</span>
-        <div class="sponsor-logos">
-          <a href="https://docs.runcaptain.com/" target="_blank" class="sponsor-link" title="Captain AI">Captain</a>
-          <a href="https://metorial.com" target="_blank" class="sponsor-link" title="Metorial AI">Metorial</a>
-          <a href="https://www.coval.dev/" target="_blank" class="sponsor-link" title="Coval AI">Coval</a>
+  <div class="sheet">
+    <header class="sheet__header">
+      <div class="brand">
+        <span class="brand__orb"></span>
+        <div class="brand__text">
+          <h1>HI MY BGM</h1>
+          <p>Live focus companion</p>
         </div>
       </div>
+      <button class="icon-btn" id="settings-btn" title="Open settings">⚙️</button>
+    </header>
+
+    <section class="state" aria-live="polite">
+      <div class="state__planet" id="state-icon">😐</div>
+      <div class="state__info">
+        <div class="state__label" id="state-label">Neutral</div>
+        <div class="state__message" id="state-message">Finding your rhythm.</div>
+      </div>
+    </section>
+
+    <section class="controls">
+      <button class="primary-btn" id="toggle-music">
+        <span class="primary-btn__icon" id="toggle-icon">▶️</span>
+        <span class="primary-btn__text" id="toggle-text">Play music</span>
+      </button>
+      <div class="mode-switch" role="radiogroup" aria-label="Music mode">
+        <label class="mode-pill">
+          <input type="radio" name="mode" value="auto" checked>
+          <span>Auto</span>
+        </label>
+        <label class="mode-pill">
+          <input type="radio" name="mode" value="focus">
+          <span>Focus</span>
+        </label>
+        <label class="mode-pill">
+          <input type="radio" name="mode" value="refocus">
+          <span>Refocus</span>
+        </label>
+        <label class="mode-pill">
+          <input type="radio" name="mode" value="calm">
+          <span>Calm</span>
+        </label>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat">
+        <span class="stat__label">Tab switches</span>
+        <span class="stat__value" id="tab-switches">0 / 10s • 0 / 60s</span>
+      </div>
+      <div class="stat">
+        <span class="stat__label">Tabs per minute</span>
+        <span class="stat__value" id="tab-rate">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat__label">Session</span>
+        <span class="stat__value" id="session-time">0m</span>
+      </div>
+      <div class="stat" id="voice-status-row">
+        <span class="stat__label">Voice control</span>
+        <span class="stat__value" id="voice-status">Off</span>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p class="footer__hint">Tip: say “pause music” when voice control is enabled. Click the planet bubble to pause/resume instantly.</p>
     </footer>
   </div>
 

@@ -43,7 +43,7 @@ export async function init() {
 /**
  * Play music for a specific mode
  */
-export async function play(mode) {
+export async function play(mode, options = {}) {
   if (!MUSIC_LIBRARY[mode]) {
     console.warn('[HMB:youtube] Unknown mode:', mode);
     mode = 'calm';
@@ -54,7 +54,7 @@ export async function play(mode) {
   const videoId = videos[Math.floor(Math.random() * videos.length)];
 
   // If already playing same mode, don't restart
-  if (currentMode === mode && isPlaying && currentPlayer) {
+  if (!options.forceRestart && currentMode === mode && isPlaying && currentPlayer) {
     console.log('[HMB:youtube] Already playing', mode);
     return;
   }
@@ -80,8 +80,10 @@ export function stop() {
  * Pause playback
  */
 export function pause() {
-  // YouTube iframe API would be needed for precise control
-  // For now, we stop
+  if (currentPlayer) {
+    currentPlayer.remove();
+    currentPlayer = null;
+  }
   isPlaying = false;
 }
 
@@ -90,7 +92,7 @@ export function pause() {
  */
 export function resume() {
   if (currentMode) {
-    play(currentMode);
+    play(currentMode, { forceRestart: true });
   }
 }
 

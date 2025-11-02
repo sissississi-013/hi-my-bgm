@@ -8,6 +8,86 @@ importScripts('tab-activity.js');
 
 console.log('[HMB:background] Service worker initialized');
 
+function getMusicHeroConfig() {
+  return new Promise((resolve) => {
+    chrome.storage.sync.get([
+      'HMB_USE_MUSICHERO',
+      'MUSICHERO_API_URL',
+      'MUSICHERO_API_KEY',
+      'MUSICHERO_INSTRUMENTAL_ONLY',
+      'MUSICHERO_DEFAULT_DURATION',
+      'HMB_ALLOW_LYRIC_HOOK'
+    ], (config) => {
+      resolve(config || {});
+    });
+  });
+}
+
+async function handleMusicHeroGenerate(payload = {}, sendResponse) {
+  try {
+    const config = await getMusicHeroConfig();
+    if (!config.HMB_USE_MUSICHERO) {
+      sendResponse({ success: false, error: 'MusicHero disabled' });
+      return;
+    }
+
+    const apiUrl = (config.MUSICHERO_API_URL || '').trim().replace(/\/$/, '');
+    const apiKey = (config.MUSICHERO_API_KEY || '').trim();
+
+    if (!apiUrl || !apiKey) {
+      sendResponse({ success: false, error: 'MusicHero credentials missing' });
+      return;
+    }
+
+    if (!payload.prompt) {
+      sendResponse({ success: false, error: 'MusicHero prompt missing' });
+      return;
+    }
+
+    const configDuration = Number(config.MUSICHERO_DEFAULT_DURATION);
+    const defaultDuration = Number.isFinite(configDuration) ? configDuration : 30;
+
+    const body = {
+      prompt: payload.prompt,
+      duration: Number.isFinite(payload.duration) ? payload.duration : defaultDuration,
+      loop: true,
+      instrumental: payload.instrumental !== undefined ? Boolean(payload.instrumental) : true
+    };
+
+    if (payload.lyrics || payload.lyricHook) {
+      body.lyrics = payload.lyrics || payload.lyricHook;
+    }
+
+    const response = await fetch(`${apiUrl}/v1/generate`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      const message = text ? `${response.status} ${text}`.trim() : `${response.status}`;
+      sendResponse({ success: false, error: `MusicHero request failed (${message})` });
+      return;
+    }
+
+    const data = await response.json();
+    const url = data.streamUrl || data.audio_url || data.download_link || data.url;
+    if (!url) {
+      sendResponse({ success: false, error: 'MusicHero response missing audio URL' });
+      return;
+    }
+
+    sendResponse({ success: true, url });
+  } catch (err) {
+    console.error('[HMB:background] MusicHero generate failed:', err);
+    sendResponse({ success: false, error: err.message || 'MusicHero error' });
+  }
+}
+
 // Initialize on install
 chrome.runtime.onInstalled.addListener((details) => {
   console.log('[HMB:background] Extension installed/updated:', details.reason);
@@ -22,7 +102,17 @@ chrome.runtime.onInstalled.addListener((details) => {
         HMB_USE_COVAL: false,
         HMB_USE_OPENAI: false,
         HMB_USE_ANTHROPIC: false,
-        HMB_USE_SPOTIFY: false
+        HMB_USE_SPOTIFY: false,
+        HMB_USE_MUSICHERO: false,
+        MUSICHERO_API_URL: '',
+        MUSICHERO_API_KEY: '',
+        MUSICHERO_INSTRUMENTAL_ONLY: true,
+        MUSICHERO_DEFAULT_DURATION: 30,
+        HMB_ALLOW_LYRIC_HOOK: true,
+        HMB_ALLOW_PAGE_CONTEXT: true,
+        HMB_ALLOW_TYPED_CUES: true,
+        HMB_USE_VOICE_COACH: true,
+        HMB_ENABLE_VOICE_CONTROL: false
       });
     }
   });
@@ -39,9 +129,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   switch (type) {
     case 'GET_TAB_SWITCHES':
-      // Return current tab switch count
-      sendResponse({ count: getTabSwitchCount() });
-      break;
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const windowId = tabs && tabs.length ? tabs[0].windowId : undefined;
+        const stats = typeof getTabStats === 'function' ? getTabStats(windowId) : { counts: {}, ratePerMin: 0 };
+        sendResponse({
+          counts: stats.counts || { last10: 0, last30: 0, last60: getTabSwitchCount?.() || 0 },
+          ratePerMin: stats.ratePerMin || 0
+        });
+      });
+      return true;
 
     case 'RESET_TAB_SWITCHES':
       // Reset tab switch counter
@@ -61,6 +157,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.storage.sync.set(payload, () => {
         sendResponse({ success: true });
       });
+      return true;
+
+    case 'MUSICHERO_GENERATE':
+      handleMusicHeroGenerate(payload || {}, sendResponse);
       return true;
 
     default:

@@ -1,12 +1,10 @@
 /**
- * popup.js - Popup UI logic
- * Displays current state, controls, and mode selection
+ * popup.js - Popup UI logic (live companion)
  */
 
 (function() {
   'use strict';
 
-  // DOM elements
   const stateIcon = document.getElementById('state-icon');
   const stateLabel = document.getElementById('state-label');
   const stateMessage = document.getElementById('state-message');
@@ -15,72 +13,77 @@
   const toggleText = document.getElementById('toggle-text');
   const settingsBtn = document.getElementById('settings-btn');
   const tabSwitchesEl = document.getElementById('tab-switches');
+  const tabRateEl = document.getElementById('tab-rate');
   const sessionTimeEl = document.getElementById('session-time');
+  const voiceStatusEl = document.getElementById('voice-status');
+  const voiceStatusRow = document.getElementById('voice-status-row');
   const modeRadios = document.querySelectorAll('input[name="mode"]');
 
-  // State
   let isPlaying = false;
   let currentState = 'neutral';
   let sessionStart = Date.now();
+  let voiceState = { enabled: false, listening: false, supported: false };
+  let lastTabStats = { last10: 0, last60: 0, ratePerMin: 0 };
 
-  // Initialize
   init();
 
   async function init() {
-    // Load current state from storage
     await loadState();
-
-    // Update UI
     updateUI();
+    updateStats();
 
-    // Set up event listeners
     toggleBtn.addEventListener('click', handleToggleMusic);
-    settingsBtn.addEventListener('click', handleOpenSettings);
+    settingsBtn.addEventListener('click', () => chrome.runtime.openOptionsPage());
 
-    modeRadios.forEach(radio => {
+    modeRadios.forEach((radio) => {
       radio.addEventListener('change', handleModeChange);
     });
 
-    // Update stats periodically
-    setInterval(updateStats, 1000);
+    setInterval(() => {
+      updateStats();
+    }, 1000);
   }
 
   async function loadState() {
-    // Query active tab for state
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     if (tab) {
-      // Check if content script can run on this tab
       if (!canRunOnTab(tab)) {
-        console.log('[HMB:popup] Content script not available on this tab');
-        stateMessage.textContent = 'Not available on this page (chrome:// URLs restricted)';
+        stateMessage.textContent = 'Not available on this page (chrome:// and system pages are restricted).';
         return;
       }
 
       try {
-        // Send message to content script to get state
-        const response = await chrome.tabs.sendMessage(tab.id, {
-          type: 'GET_STATE'
-        });
-
+        const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_STATE' });
         if (response) {
           currentState = response.label || 'neutral';
           isPlaying = response.isPlaying || false;
+          if (isPlaying) {
+            sessionStart = Date.now();
+          }
+          if (response.voice) {
+            voiceState = {
+              enabled: Boolean(response.voice.enabled),
+              listening: Boolean(response.voice.listening),
+              supported: response.voice.supported !== false
+            };
+          }
         }
       } catch (err) {
         console.warn('[HMB:popup] Could not get state from content script:', err);
-        // Content script might not be loaded yet
-        stateMessage.textContent = 'Loading... (refresh page if bubble not visible)';
+        stateMessage.textContent = 'Bubble not active yet. Refresh the page if needed.';
       }
     }
 
-    // Get tab switches from background
     try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'GET_TAB_SWITCHES'
-      });
-      if (response && typeof response.count === 'number') {
-        tabSwitchesEl.textContent = response.count;
+      const statsResponse = await chrome.runtime.sendMessage({ type: 'GET_TAB_SWITCHES' });
+      if (statsResponse) {
+        const counts = statsResponse.counts || { last10: 0, last60: 0 };
+        lastTabStats = {
+          last10: counts.last10 || 0,
+          last60: counts.last60 || 0,
+          ratePerMin: statsResponse.ratePerMin || 0
+        };
       }
     } catch (err) {
       console.warn('[HMB:popup] Could not get tab switches:', err);
@@ -88,22 +91,51 @@
   }
 
   function updateUI() {
-    // Update state display
-    const stateConfig = getStateConfig(currentState);
-    stateIcon.textContent = stateConfig.icon;
-    stateLabel.textContent = stateConfig.label;
-    stateMessage.textContent = stateConfig.message;
+    const config = getStateConfig(currentState);
+    stateIcon.textContent = config.icon;
+    stateLabel.textContent = config.label;
+    stateMessage.textContent = config.message;
 
-    // Update toggle button
     if (isPlaying) {
+      toggleBtn.classList.remove('paused');
       toggleIcon.textContent = '⏸️';
-      toggleText.textContent = 'Pause';
-      toggleBtn.classList.add('playing');
+      toggleText.textContent = 'Pause music';
     } else {
+      toggleBtn.classList.add('paused');
       toggleIcon.textContent = '▶️';
-      toggleText.textContent = 'Play';
-      toggleBtn.classList.remove('playing');
+      toggleText.textContent = 'Play music';
     }
+
+    updateVoiceStatus();
+    updateTabStats();
+  }
+
+  function updateStats() {
+    const elapsed = Math.max(0, Date.now() - sessionStart);
+    const minutes = Math.floor(elapsed / 60000);
+    const seconds = Math.floor((elapsed % 60000) / 1000);
+    sessionTimeEl.textContent = seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+
+  function updateTabStats() {
+    tabSwitchesEl.textContent = `${lastTabStats.last10} / 10s • ${lastTabStats.last60} / 60s`;
+    tabRateEl.textContent = Number(lastTabStats.ratePerMin || 0).toFixed(1);
+  }
+
+  function updateVoiceStatus() {
+    if (!voiceStatusRow) return;
+    if (!voiceState.supported) {
+      voiceStatusRow.style.display = 'none';
+      return;
+    }
+    voiceStatusRow.style.display = '';
+    if (!voiceState.enabled) {
+      voiceStatusEl.textContent = 'Off';
+      voiceStatusEl.className = 'stat__value';
+      return;
+    }
+    voiceStatusEl.textContent = voiceState.listening ? 'Listening…' : 'Standby';
+    voiceStatusEl.className = `stat__value ${voiceState.listening ? 'active' : ''}`;
   }
 
   function getStateConfig(state) {
@@ -111,7 +143,7 @@
       focused: {
         icon: '😄',
         label: 'Focused',
-        message: "You're in the zone! Keep going."
+        message: "Flow locked in. Keep going!"
       },
       neutral: {
         icon: '😐',
@@ -120,13 +152,13 @@
       },
       distracted: {
         icon: '😟',
-        label: 'Distracted',
-        message: 'Lots happening. Let\'s refocus gently.'
+        label: 'Refocus',
+        message: 'Lots happening. Choose one tab to lean into.'
       },
       idle: {
         icon: '😴',
         label: 'Idle',
-        message: 'Taking a break? That\'s wise.'
+        message: 'Taking a breather. Ready when you are.'
       }
     };
 
@@ -135,57 +167,33 @@
 
   async function handleToggleMusic() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    console.log('[HMB:popup] Toggle music clicked, tab:', tab);
-
-    // Check if we can communicate with this tab
     if (!canRunOnTab(tab)) {
-      const msg = tab && tab.url
-        ? `Not available on ${new URL(tab.url).protocol} pages`
-        : 'Not available on this page';
-      alert(`Music controls not available. ${msg}\n\nPlease open a regular website (http:// or https://)`);
+      alert('Controls unavailable on this page. Try a regular https:// tab.');
       return;
     }
 
-    isPlaying = !isPlaying;
-
+    const shouldPlay = !isPlaying;
     try {
-      await chrome.tabs.sendMessage(tab.id, {
-        type: isPlaying ? 'PLAY_MUSIC' : 'PAUSE_MUSIC'
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        type: shouldPlay ? 'PLAY_MUSIC' : 'PAUSE_MUSIC'
       });
-      updateUI();
-    } catch (err) {
-      console.error('[HMB:popup] Failed to send message:', err);
-      // Revert state if failed
-      isPlaying = !isPlaying;
-      updateUI();
-
-      // Show more helpful error message
-      if (err.message && err.message.includes('Receiving end does not exist')) {
-        stateMessage.textContent = 'Bubble not loaded. Please refresh the page (F5) and try again.';
-      } else {
-        stateMessage.textContent = 'Error: ' + (err.message || 'Please refresh the page');
+      if (response && response.success !== false) {
+        isPlaying = shouldPlay;
+        if (shouldPlay) {
+          sessionStart = Date.now();
+        }
+        updateUI();
       }
+    } catch (err) {
+      console.error('[HMB:popup] Toggle failed:', err);
     }
-  }
-
-  function handleOpenSettings() {
-    chrome.runtime.openOptionsPage();
   }
 
   async function handleModeChange(event) {
     const mode = event.target.value;
-    console.log('[HMB:popup] Mode changed to:', mode);
-
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-    // Check if we can communicate with this tab
     if (!canRunOnTab(tab)) {
-      const msg = tab && tab.url
-        ? `Not available on ${new URL(tab.url).protocol} pages`
-        : 'Not available on this page';
-      alert(`Mode controls not available. ${msg}\n\nPlease open a regular website (http:// or https://)`);
-      // Reset to auto
+      alert('Mode controls unavailable on this page.');
       document.querySelector('input[value="auto"]').checked = true;
       return;
     }
@@ -195,69 +203,18 @@
         type: 'SET_MODE',
         payload: { mode }
       });
+      if (mode !== 'auto') {
+        isPlaying = true;
+      }
+      updateUI();
     } catch (err) {
-      console.error('[HMB:popup] Could not set mode:', err);
-      if (err.message && err.message.includes('Receiving end does not exist')) {
-        stateMessage.textContent = 'Bubble not loaded. Please refresh the page (F5) and try again.';
-      } else {
-        stateMessage.textContent = 'Error: ' + (err.message || 'Please refresh the page');
-      }
+      console.error('[HMB:popup] Mode change failed:', err);
     }
   }
 
-  function updateStats() {
-    // Update session time
-    const elapsed = Math.floor((Date.now() - sessionStart) / 60000); // minutes
-    sessionTimeEl.textContent = elapsed > 0 ? `${elapsed}m` : '0m';
-  }
-
-  /**
-   * Check if content script can run on this tab
-   * Content scripts are restricted on chrome://, chrome-extension://, and other special pages
-   */
   function canRunOnTab(tab) {
-    if (!tab) {
-      console.log('[HMB:popup] No tab object');
-      return false;
-    }
-
-    if (!tab.url) {
-      console.log('[HMB:popup] Tab URL not available, assuming it\'s OK to try');
-      // If we can't read the URL, assume it's a regular page and let the try/catch handle it
-      return true;
-    }
-
-    const url = tab.url.toLowerCase();
-    console.log('[HMB:popup] Checking URL:', url);
-
-    // Restricted URL schemes
-    const restrictedSchemes = [
-      'chrome://',
-      'chrome-extension://',
-      'edge://',
-      'about:',
-      'file://', // Unless user enabled it in extension settings
-      'view-source:',
-      'data:',
-      'javascript:'
-    ];
-
-    // Check if URL starts with any restricted scheme
-    for (const scheme of restrictedSchemes) {
-      if (url.startsWith(scheme)) {
-        console.log('[HMB:popup] Blocked restricted scheme:', scheme);
-        return false;
-      }
-    }
-
-    // Chrome Web Store is also restricted
-    if (url.includes('chrome.google.com/webstore')) {
-      console.log('[HMB:popup] Blocked Chrome Web Store');
-      return false;
-    }
-
-    console.log('[HMB:popup] URL is OK');
-    return true;
+    if (!tab || !tab.url) return false;
+    const url = new URL(tab.url);
+    return url.protocol === 'http:' || url.protocol === 'https:';
   }
-
 })();
