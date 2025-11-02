@@ -160,6 +160,11 @@
       </div>
     </div>
     <div class="hmb-info-panel" id="hmb-info" role="tooltip" aria-live="polite" aria-hidden="true">
+      <div class="hmb-info-panel__preview" id="hmb-info-preview" aria-hidden="true">
+        <div class="hmb-info-panel__preview-glass" aria-hidden="true"></div>
+        <img class="hmb-info-panel__preview-img" id="hmb-info-preview-img" alt="Current tab snapshot" loading="lazy" decoding="async" />
+        <div class="hmb-info-panel__preview-loader" id="hmb-info-preview-loader" aria-hidden="true"></div>
+      </div>
       <div class="hmb-info-panel__title" id="hmb-info-title"></div>
       <div class="hmb-info-panel__status-row">
         <span class="hmb-info-panel__label" id="hmb-info-label">Neutral</span>
@@ -188,6 +193,8 @@
   const statusLabelEl = document.getElementById('hmb-info-label');
   const statusMessageEl = document.getElementById('hmb-info-message');
   const statusMetaEl = document.getElementById('hmb-info-meta');
+  const previewWrapperEl = document.getElementById('hmb-info-preview');
+  const previewImageEl = document.getElementById('hmb-info-preview-img');
   const planetContainer = document.getElementById('hmb-planet-container');
   const faceEl = document.getElementById('hmb-face');
 
@@ -207,6 +214,13 @@
   let lastThemeSignature = '';
   let voiceControl = null;
   let voicePrimerHandler = null;
+
+  const PREVIEW_REFRESH_INTERVAL = 20000;
+  const previewState = {
+    dataUrl: '',
+    lastCaptured: 0,
+    pending: false
+  };
 
   updateStatus(state.lastStatusMessage);
 
@@ -659,6 +673,9 @@
   if (PageContext && PageContext.subscribe) {
     PageContext.subscribe((context) => {
       latestPage = context;
+      if (context) {
+        markPreviewStale('New content');
+      }
       updateStatus(state.lastStatusMessage);
       requestImmediateTick('page-change');
     });
@@ -695,6 +712,7 @@
     if (!document.hidden) {
       setTimeout(() => updatePlanetTheme('visible'), 60);
       setTimeout(() => tryStartVoiceRecognition(), 180);
+      setTimeout(() => ensurePreviewFresh({ force: true }), 220);
     } else if (voiceControl && voiceControl.listening) {
       try {
         voiceControl.recognition.stop();
@@ -706,6 +724,7 @@
   window.addEventListener('focus', () => {
     updatePlanetTheme('focus');
     tryStartVoiceRecognition();
+    ensurePreviewFresh({ force: true });
   }, { passive: true });
 
   // Initialize Audio Analyzer
@@ -779,6 +798,7 @@
         }
         requestImmediateTick('tab-switch');
         updatePlanetTheme('tab-switch-message');
+        markPreviewStale('Tab changed');
         break;
       }
       case 'TAB_BURST': {
@@ -909,6 +929,10 @@
       const pageSig = pageSignature(latestPage);
       const cuesSig = cuesSignature(latestCues);
 
+      if (pageSig !== state.lastPageSignature || cuesSig !== state.lastCueSignature) {
+        markPreviewStale('Updating view');
+      }
+
       if (changed) {
         console.log('[HMB:overlay] State changed:', state.label, '->', newLabel);
         state.label = newLabel;
@@ -1014,11 +1038,85 @@
       }
       rootEl.classList.add('hmb-root--show-info');
       infoPanel?.setAttribute('aria-hidden', 'false');
+      ensurePreviewFresh();
     } else {
       rootEl.classList.remove('hmb-root--show-info');
       rootEl.classList.remove('hmb-root--info-below');
       infoPanel?.setAttribute('aria-hidden', 'true');
     }
+  }
+
+  async function ensurePreviewFresh(options = {}) {
+    const { force = false } = options;
+    if (!previewWrapperEl || !previewImageEl) return;
+    if (document.hidden) return;
+    if (previewState.pending) return;
+
+    if (previewState.dataUrl && !previewImageEl.src) {
+      previewImageEl.src = previewState.dataUrl;
+      previewImageEl.style.opacity = '1';
+      previewWrapperEl.classList.add('hmb-info-panel__preview--ready');
+    }
+
+    const now = Date.now();
+    const shouldRefresh = force || !previewState.dataUrl || (now - previewState.lastCaptured) > PREVIEW_REFRESH_INTERVAL;
+    if (!shouldRefresh) {
+      return;
+    }
+
+    previewState.pending = true;
+    previewWrapperEl.classList.remove('hmb-info-panel__preview--error');
+    previewWrapperEl.removeAttribute('data-error');
+    previewWrapperEl.classList.add('hmb-info-panel__preview--loading');
+
+    try {
+      const response = await chrome.runtime.sendMessage({ type: 'HMB_CAPTURE_VISIBLE_TAB' });
+      if (response && response.success && response.dataUrl) {
+        previewState.dataUrl = response.dataUrl;
+        previewState.lastCaptured = Date.now();
+        previewImageEl.src = response.dataUrl;
+        previewImageEl.style.opacity = '1';
+        previewWrapperEl.classList.add('hmb-info-panel__preview--ready');
+        previewWrapperEl.removeAttribute('data-stale-reason');
+      } else {
+        const errorMsg = normalizePreviewError(response?.error);
+        previewWrapperEl.classList.add('hmb-info-panel__preview--error');
+        previewWrapperEl.setAttribute('data-error', errorMsg);
+      }
+    } catch (err) {
+      console.warn('[HMB:overlay] Preview capture failed:', err);
+      const message = normalizePreviewError(err?.message);
+      previewWrapperEl.classList.add('hmb-info-panel__preview--error');
+      previewWrapperEl.setAttribute('data-error', message);
+    } finally {
+      previewState.pending = false;
+      previewWrapperEl.classList.remove('hmb-info-panel__preview--loading');
+    }
+  }
+
+  function markPreviewStale(reason = '') {
+    previewState.lastCaptured = 0;
+    const hasSnapshot = Boolean(previewState.dataUrl);
+    if (reason && hasSnapshot) {
+      previewWrapperEl?.setAttribute('data-stale-reason', reason);
+    } else {
+      previewWrapperEl?.removeAttribute('data-stale-reason');
+    }
+    previewWrapperEl?.classList.remove('hmb-info-panel__preview--error');
+    previewWrapperEl?.removeAttribute('data-error');
+  }
+
+  function normalizePreviewError(message) {
+    if (!message) {
+      return 'Preview unavailable on this page';
+    }
+    if (/permission/i.test(message) || /not (?:allow|grant)/i.test(message)) {
+      return 'Preview unavailable on this page';
+    }
+    if (/visible tab/i.test(message) || /capture/i.test(message) || /receiving end/i.test(message) || /establish/i.test(message)) {
+      return 'Preview unavailable right now';
+    }
+    return message;
   }
 
   function handlePointerDown(event) {

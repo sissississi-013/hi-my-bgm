@@ -72,6 +72,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return true;
 
+    case 'HMB_CAPTURE_VISIBLE_TAB': {
+      const windowId = sender?.tab?.windowId;
+      try {
+        chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, (dataUrl) => {
+          const err = chrome.runtime.lastError;
+          if (err || !dataUrl) {
+            const message = err?.message || 'Unable to capture current view';
+            sendResponse({ success: false, error: message });
+            return;
+          }
+          sendResponse({ success: true, dataUrl });
+        });
+      } catch (err) {
+        sendResponse({ success: false, error: err.message });
+      }
+      return true;
+    }
+
     default:
       console.warn('[HMB:background] Unknown message type:', type);
       sendResponse({ error: 'Unknown message type' });
