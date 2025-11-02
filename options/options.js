@@ -49,6 +49,7 @@
   const covalVoiceId = document.getElementById('coval-voice-id');
 
   const useVoiceCoach = document.getElementById('use-voice-coach');
+  const enableVoiceControl = document.getElementById('enable-voice-control');
 
   const useOpenAI = document.getElementById('use-openai');
   const openaiConfig = document.getElementById('openai-config');
@@ -61,6 +62,7 @@
   const saveBtn = document.getElementById('save-btn');
   const resetBtn = document.getElementById('reset-btn');
   const statusMessage = document.getElementById('status-message');
+  let statusTimer = null;
 
   // Initialize
   init();
@@ -71,7 +73,7 @@
 
     // Set up event listeners
     idleTimeout.addEventListener('input', () => {
-      idleValue.textContent = idleTimeout.value;
+      idleValue.textContent = `${idleTimeout.value}s`;
     });
 
     distractionThreshold.addEventListener('input', () => {
@@ -116,7 +118,7 @@
     chrome.storage.sync.get(null, (result) => {
       // Behavior
       idleTimeout.value = result.idleTimeout || 10;
-      idleValue.textContent = idleTimeout.value;
+      idleValue.textContent = `${idleTimeout.value}s`;
       distractionThreshold.value = result.distractionThreshold || 5;
       distractionValue.textContent = distractionThreshold.value;
 
@@ -176,6 +178,7 @@
       }
 
       useVoiceCoach.checked = result.HMB_USE_VOICE_COACH !== false;
+      enableVoiceControl.checked = result.HMB_ENABLE_VOICE_CONTROL || false;
 
       // OpenAI
       useOpenAI.checked = result.HMB_USE_OPENAI || false;
@@ -235,6 +238,7 @@
       COVAL_API_KEY: covalApiKey.value,
       COVAL_VOICE_ID: covalVoiceId.value,
       HMB_USE_VOICE_COACH: useVoiceCoach.checked,
+      HMB_ENABLE_VOICE_CONTROL: enableVoiceControl.checked,
 
       // OpenAI
       HMB_USE_OPENAI: useOpenAI.checked,
@@ -247,6 +251,7 @@
 
     chrome.storage.sync.set(settings, () => {
       showStatus('Settings saved successfully!', 'success');
+      broadcastPositionPreset(settings.bubblePosition);
     });
   }
 
@@ -258,16 +263,60 @@
     chrome.storage.sync.clear(() => {
       loadSettings();
       showStatus('Settings reset to defaults', 'success');
+      broadcastPositionPreset(bubblePosition.value);
     });
   }
 
-  function showStatus(message, type) {
-    statusMessage.textContent = message;
-    statusMessage.className = `status-message ${type}`;
+  function broadcastPositionPreset(preset) {
+    if (!chrome.tabs || !chrome.tabs.query) {
+      return;
+    }
 
-    setTimeout(() => {
-      statusMessage.className = 'status-message';
-    }, 3000);
+    try {
+      chrome.tabs.query({}, (tabs = []) => {
+        if (chrome.runtime.lastError) {
+          console.warn('[HMB:options] Could not query tabs:', chrome.runtime.lastError.message);
+          return;
+        }
+
+        tabs.forEach((tab) => {
+          if (!tab.id || !tab.url || !/^https?:/i.test(tab.url)) {
+            return;
+          }
+
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'HMB_SET_POSITION_PRESET',
+            payload: { preset, animate: true }
+          }, () => {
+            const err = chrome.runtime.lastError;
+            if (err && !/Receiving end does not exist/.test(err.message)) {
+              console.debug('[HMB:options] Broadcast preset warning:', err.message);
+            }
+          });
+        });
+      });
+    } catch (err) {
+      console.warn('[HMB:options] Unable to broadcast position preset:', err);
+    }
+  }
+
+  function showStatus(message, type) {
+    if (!statusMessage) return;
+
+    statusMessage.textContent = message;
+    statusMessage.classList.remove('success', 'error');
+    if (type) {
+      statusMessage.classList.add(type);
+    }
+
+    if (statusTimer) {
+      clearTimeout(statusTimer);
+    }
+
+    statusTimer = setTimeout(() => {
+      statusMessage.classList.remove('success', 'error');
+      statusMessage.textContent = '';
+    }, 3200);
   }
 
 })();

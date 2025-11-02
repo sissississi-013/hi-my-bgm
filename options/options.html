@@ -3,233 +3,239 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HI MY BGM - Settings</title>
+  <title>HI MY BGM – Settings</title>
   <link rel="stylesheet" href="options.css">
 </head>
 <body>
-  <div class="container">
-    <header class="header">
-      <h1 class="title">HI MY BGM Settings</h1>
-      <p class="subtitle">Configure your focus companion</p>
+  <div class="options-page">
+    <header class="options-hero">
+      <div class="options-hero__brand">
+        <span class="options-hero__planet" aria-hidden="true">🪐</span>
+        <div>
+          <h1 class="options-hero__title">HI MY BGM Settings</h1>
+          <p class="options-hero__subtitle">Fine-tune the companion that keeps you in flow.</p>
+        </div>
+      </div>
+      <div class="options-status" id="status-message" role="status" aria-live="polite"></div>
     </header>
 
-    <main class="main">
-      <!-- Behavior Settings -->
-      <section class="section">
-        <h2 class="section-title">Behavior Thresholds</h2>
-        <p class="section-desc">Adjust how the bubble detects your focus state</p>
-
-        <div class="form-group">
-          <label class="label">
-            <span class="label-text">Idle timeout (seconds)</span>
-            <span class="label-value" id="idle-value">10</span>
+    <main class="options-grid">
+      <section class="options-card">
+        <div class="options-card__header">
+          <h2>Focus sensing</h2>
+          <p>Adjust how quickly the planet notices momentum shifts.</p>
+        </div>
+        <div class="field">
+          <label class="field-label" for="idle-timeout">
+            <span>Idle timeout</span>
+            <span class="field-value" id="idle-value">10s</span>
           </label>
           <input type="range" id="idle-timeout" min="5" max="60" step="5" value="10" class="slider">
-          <p class="help-text">Time without input before marking as idle</p>
+          <p class="field-hint">Time without input before the companion suggests a pause.</p>
         </div>
-
-        <div class="form-group">
-          <label class="label">
-            <span class="label-text">Distraction threshold</span>
-            <span class="label-value" id="distraction-value">5</span>
+        <div class="field">
+          <label class="field-label" for="distraction-threshold">
+            <span>Distraction threshold</span>
+            <span class="field-value" id="distraction-value">5</span>
           </label>
           <input type="range" id="distraction-threshold" min="2" max="15" step="1" value="5" class="slider">
-          <p class="help-text">Tab switches in 60s to mark as distracted</p>
+          <p class="field-hint">Tab switches within 60 seconds that trigger a gentle refocus.</p>
         </div>
+        <label class="toggle">
+          <input type="checkbox" id="allow-page-text" checked>
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>Enable page context</strong>
+            <small>Let the bubble read visible page text for smarter prompts.</small>
+          </span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="allow-typed-text" checked>
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>Capture typed cues</strong>
+            <small>Use what you type locally to time refocus nudges.</small>
+          </span>
+        </label>
       </section>
 
-      <!-- Context & Signals -->
-      <section class="section">
-        <h2 class="section-title">Context &amp; Signals</h2>
-        <p class="section-desc">Opt-in access that powers smarter prompts and lyrics</p>
-
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="allow-page-text" checked>
-            <span>Allow page text for context &amp; lyrics (opt-in)</span>
-          </label>
+      <section class="options-card">
+        <div class="options-card__header">
+          <h2>Planet interface</h2>
+          <p>Place the companion and decide how immersive it feels.</p>
         </div>
-
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="allow-typed-text" checked>
-            <span>Allow reading typed text for cues (opt-in)</span>
-          </label>
-        </div>
-      </section>
-
-      <!-- UI Settings -->
-      <section class="section">
-        <h2 class="section-title">Appearance</h2>
-
-        <div class="form-group">
-          <label class="label">
-            <span class="label-text">Bubble position</span>
-          </label>
+        <div class="field">
+          <label class="field-label" for="bubble-position">Planet anchor</label>
           <select id="bubble-position" class="select">
-            <option value="bottom-right">Bottom Right</option>
-            <option value="bottom-left">Bottom Left</option>
-            <option value="top-right">Top Right</option>
-            <option value="top-left">Top Left</option>
+            <option value="bottom-right">Bottom right</option>
+            <option value="bottom-left">Bottom left</option>
+            <option value="top-right">Top right</option>
+            <option value="top-left">Top left</option>
           </select>
+          <p class="field-hint">You can still drag the planet anywhere—this sets its default perch.</p>
         </div>
-
-        <div class="form-group">
-          <label class="label">
-            <span class="label-text">Color theme</span>
-          </label>
+        <div class="field">
+          <label class="field-label" for="color-theme">Fallback tint</label>
           <select id="color-theme" class="select">
             <option value="cool">Cool (Blue/Cyan)</option>
             <option value="warm">Warm (Orange/Red)</option>
             <option value="neutral">Neutral (Gray)</option>
           </select>
         </div>
+        <label class="toggle">
+          <input type="checkbox" id="enable-voice-control">
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>Voice control</strong>
+            <small>Say “play”, “pause”, or “focus mode” to steer the soundtrack hands-free.</small>
+          </span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="use-voice-coach" checked>
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>Voice coach</strong>
+            <small>Occasional spoken nudges when you drift.</small>
+          </span>
+        </label>
       </section>
 
-      <!-- Music Backend -->
-      <section class="section">
-        <h2 class="section-title">Music Backend</h2>
-
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="use-youtube" checked>
-            <span>YouTube (default, no auth required)</span>
-          </label>
+      <section class="options-card">
+        <div class="options-card__header">
+          <h2>Playback &amp; music</h2>
+          <p>Choose the engines that score your session.</p>
         </div>
-
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="use-spotify">
-            <span>Spotify (requires premium)</span>
-          </label>
-          <div class="nested-inputs" id="spotify-config">
-            <input type="text" id="spotify-client-id" placeholder="Spotify Client ID" class="input">
-            <input type="text" id="spotify-redirect-uri" placeholder="Redirect URI" class="input">
+        <label class="toggle">
+          <input type="checkbox" id="use-youtube" checked>
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>YouTube ambient</strong>
+            <small>No login required, curated focus livestreams.</small>
+          </span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="use-spotify">
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>Spotify Premium</strong>
+            <small>Connect your account for personal playlists.</small>
+          </span>
+        </label>
+        <div class="field-stack" id="spotify-config">
+          <input type="text" id="spotify-client-id" placeholder="Spotify Client ID" class="input">
+          <input type="text" id="spotify-redirect-uri" placeholder="Redirect URI" class="input">
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="use-musichero">
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>MusicHero overlays</strong>
+            <small>AI-composed layers that blend with the backing track.</small>
+          </span>
+        </label>
+        <div class="field-stack" id="musichero-config">
+          <input type="text" id="musichero-api-url" placeholder="MusicHero API URL" class="input">
+          <input type="password" id="musichero-api-key" placeholder="MusicHero API Key" class="input">
+          <div class="field-inline">
+            <label class="checkbox-inline">
+              <input type="checkbox" id="musichero-instrumental" checked>
+              <span>Instrumental only</span>
+            </label>
+            <label class="checkbox-inline">
+              <input type="checkbox" id="allow-lyric-hook" checked>
+              <span>Allow lyric hooks</span>
+            </label>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="use-musichero">
-            <span><strong>MusicHero</strong> - AI overlay generation</span>
-          </label>
-          <div class="nested-inputs" id="musichero-config">
-            <input type="text" id="musichero-api-url" placeholder="MusicHero API URL" class="input">
-            <input type="password" id="musichero-api-key" placeholder="MusicHero API Key" class="input">
-            <div class="inline-inputs">
-              <label class="checkbox-inline">
-                <input type="checkbox" id="musichero-instrumental" checked>
-                <span>Instrumental only</span>
-              </label>
-              <label class="checkbox-inline">
-                <input type="checkbox" id="allow-lyric-hook" checked>
-                <span>Allow lyric hook injection</span>
-              </label>
-            </div>
-            <input type="number" id="musichero-duration" min="10" max="120" step="5" placeholder="Default duration (seconds)" class="input">
-          </div>
-        </div>
-      </section>
-
-      <!-- AI Integrations -->
-      <section class="section">
-        <h2 class="section-title">AI Integrations (Optional)</h2>
-        <p class="section-desc">All integrations are opt-in and fail-graceful</p>
-
-        <!-- Captain AI -->
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="use-captain">
-            <span>
-              <strong>Captain AI</strong> - Agent orchestration
-              <a href="https://docs.runcaptain.com/" target="_blank" class="link">docs</a>
-            </span>
-          </label>
-          <div class="nested-inputs" id="captain-config">
-            <input type="text" id="captain-api-url" placeholder="API URL (default: https://api.runcaptain.com)" class="input">
-            <input type="password" id="captain-api-key" placeholder="API Key" class="input">
-          </div>
-        </div>
-
-        <!-- Metorial AI -->
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="use-metorial">
-            <span>
-              <strong>Metorial AI</strong> - User memory & personalization
-              <a href="https://metorial.com" target="_blank" class="link">info</a>
-            </span>
-          </label>
-          <div class="nested-inputs" id="metorial-config">
-            <input type="text" id="metorial-api-url" placeholder="API URL (default: https://api.metorial.com)" class="input">
-            <input type="password" id="metorial-api-key" placeholder="API Key" class="input">
-          </div>
-        </div>
-
-        <!-- Coval AI -->
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="use-coval">
-            <span>
-              <strong>Coval AI</strong> - Voice TTS
-              <a href="https://www.coval.dev/" target="_blank" class="link">docs</a>
-            </span>
-          </label>
-          <div class="nested-inputs" id="coval-config">
-            <input type="text" id="coval-api-url" placeholder="API URL (default: https://api.coval.dev)" class="input">
-            <input type="password" id="coval-api-key" placeholder="API Key" class="input">
-            <input type="text" id="coval-voice-id" placeholder="Voice ID (optional)" class="input">
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="use-voice-coach" checked>
-            <span><strong>Voice Coach</strong> - Spoken focus nudges</span>
-          </label>
-        </div>
-
-        <!-- OpenAI -->
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="use-openai">
-            <span><strong>OpenAI</strong> - LLM for reasoning</span>
-          </label>
-          <div class="nested-inputs" id="openai-config">
-            <input type="password" id="openai-api-key" placeholder="OpenAI API Key" class="input">
-          </div>
-        </div>
-
-        <!-- Anthropic -->
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="use-anthropic">
-            <span><strong>Anthropic</strong> - Claude for reasoning</span>
-          </label>
-          <div class="nested-inputs" id="anthropic-config">
-            <input type="password" id="anthropic-api-key" placeholder="Anthropic API Key" class="input">
-          </div>
+          <input type="number" id="musichero-duration" min="10" max="120" step="5" placeholder="Default duration (seconds)" class="input">
         </div>
       </section>
 
-      <!-- Privacy -->
-      <section class="section">
-        <h2 class="section-title">Privacy</h2>
-        <p class="privacy-notice">
-          Page text, typed cues, and lyric hooks are only used when enabled above and never stored.
-          HI MY BGM stores interaction timestamps and counters locally.
-          All cloud integrations are opt-in and configurable.
-        </p>
+      <section class="options-card">
+        <div class="options-card__header">
+          <h2>AI copilots</h2>
+          <p>Opt into advanced reasoning or personalization partners.</p>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="use-captain">
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>Captain AI orchestration</strong>
+            <small>Route tasks through Captain’s agent graph.</small>
+          </span>
+        </label>
+        <div class="field-stack" id="captain-config">
+          <input type="text" id="captain-api-url" placeholder="API URL (default: https://api.runcaptain.com)" class="input">
+          <input type="password" id="captain-api-key" placeholder="API Key" class="input">
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="use-metorial">
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>Metorial memory</strong>
+            <small>Contextualize with long-term personal preferences.</small>
+          </span>
+        </label>
+        <div class="field-stack" id="metorial-config">
+          <input type="text" id="metorial-api-url" placeholder="API URL (default: https://api.metorial.com)" class="input">
+          <input type="password" id="metorial-api-key" placeholder="API Key" class="input">
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="use-coval">
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>Coval voice</strong>
+            <small>Bring lifelike narration to your nudges.</small>
+          </span>
+        </label>
+        <div class="field-stack" id="coval-config">
+          <input type="text" id="coval-api-url" placeholder="API URL (default: https://api.coval.dev)" class="input">
+          <input type="password" id="coval-api-key" placeholder="API Key" class="input">
+          <input type="text" id="coval-voice-id" placeholder="Voice ID (optional)" class="input">
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="use-openai">
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>OpenAI reasoning</strong>
+            <small>Let GPT craft deeper coaching moments.</small>
+          </span>
+        </label>
+        <div class="field-stack" id="openai-config">
+          <input type="password" id="openai-api-key" placeholder="OpenAI API Key" class="input">
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="use-anthropic">
+          <span class="toggle-decor" aria-hidden="true"></span>
+          <span class="toggle-copy">
+            <strong>Anthropic Claude</strong>
+            <small>Blend gentle, thoughtful copy into the experience.</small>
+          </span>
+        </label>
+        <div class="field-stack" id="anthropic-config">
+          <input type="password" id="anthropic-api-key" placeholder="Anthropic API Key" class="input">
+        </div>
       </section>
 
-      <!-- Actions -->
-      <div class="actions">
-        <button class="btn btn-primary" id="save-btn">Save Settings</button>
-        <button class="btn btn-secondary" id="reset-btn">Reset to Defaults</button>
-      </div>
-
-      <div class="status-message" id="status-message"></div>
+      <section class="options-card options-card--light">
+        <div class="options-card__header">
+          <h2>Privacy</h2>
+          <p>The bubble remembers signals, not sentences. You’re in control.</p>
+        </div>
+        <ul class="privacy-list">
+          <li>Page text and typed cues stay on-device unless you opt into integrations above.</li>
+          <li>Tab counters and idle timers are stored locally for coaching.</li>
+          <li>Integrations only activate when you provide keys and toggle them on.</li>
+        </ul>
+      </section>
     </main>
+
+    <footer class="options-footer">
+      <div class="options-actions">
+        <button class="btn btn-primary" id="save-btn">Save changes</button>
+        <button class="btn btn-ghost" id="reset-btn">Reset to defaults</button>
+      </div>
+      <div class="options-footer__note">Powered by Captain • Metorial • Coval</div>
+    </footer>
   </div>
 
   <script src="options.js"></script>

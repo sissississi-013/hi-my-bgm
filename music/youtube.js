@@ -68,11 +68,7 @@ export async function play(mode) {
  * Stop playback
  */
 export function stop() {
-  if (currentPlayer) {
-    currentPlayer.remove();
-    currentPlayer = null;
-  }
-  isPlaying = false;
+  pause();
   currentMode = null;
 }
 
@@ -80,8 +76,10 @@ export function stop() {
  * Pause playback
  */
 export function pause() {
-  // YouTube iframe API would be needed for precise control
-  // For now, we stop
+  if (currentPlayer) {
+    currentPlayer.remove();
+    currentPlayer = null;
+  }
   isPlaying = false;
 }
 

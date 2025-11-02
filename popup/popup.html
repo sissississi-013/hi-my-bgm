@@ -7,80 +7,70 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="popup-container">
-    <header class="header">
-      <h1 class="title">HI MY BGM</h1>
-      <p class="subtitle">Your focus companion</p>
+  <div class="popup">
+    <header class="popup__header">
+      <div class="popup__brand">
+        <span class="popup__planet" aria-hidden="true">🪐</span>
+        <div>
+          <h1 class="popup__title">HI MY BGM</h1>
+          <p class="popup__subtitle" id="state-message">Finding your rhythm.</p>
+        </div>
+      </div>
+      <button class="icon-btn" id="settings-btn" title="Open settings" aria-label="Open settings">
+        ⚙️
+      </button>
     </header>
 
-    <main class="main">
-      <!-- Current State Display -->
-      <section class="state-display">
-        <div class="state-icon" id="state-icon">😐</div>
-        <div class="state-info">
-          <div class="state-label" id="state-label">Neutral</div>
-          <div class="state-message" id="state-message">Finding your rhythm.</div>
+    <main class="popup__main">
+      <section class="state-card">
+        <div class="state-card__emoji" id="state-icon" aria-hidden="true">😐</div>
+        <div class="state-card__meta">
+          <div class="state-card__label" id="state-label">Neutral</div>
+          <div class="state-card__detail" id="state-detail">Stay easy and settle in.</div>
         </div>
-      </section>
-
-      <!-- Controls -->
-      <section class="controls">
         <button class="btn btn-primary" id="toggle-music">
-          <span class="btn-icon" id="toggle-icon">▶️</span>
-          <span class="btn-text" id="toggle-text">Play</span>
-        </button>
-
-        <button class="btn btn-secondary" id="settings-btn" title="Open Settings">
-          ⚙️
+          <span class="btn-icon" id="toggle-icon">▶</span>
+          <span id="toggle-text">Play</span>
         </button>
       </section>
 
-      <!-- Mode Override -->
-      <section class="mode-selector">
-        <label class="label">Mode:</label>
-        <div class="radio-group">
-          <label class="radio-label">
-            <input type="radio" name="mode" value="auto" checked>
-            <span>Auto</span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="mode" value="focus">
-            <span>Focus</span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="mode" value="refocus">
-            <span>Refocus</span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="mode" value="calm">
-            <span>Calm</span>
-          </label>
-        </div>
+      <section class="segment" role="radiogroup" aria-label="Mode">
+        <label class="segment__option">
+          <input type="radio" name="mode" value="auto" checked>
+          <span>Auto</span>
+        </label>
+        <label class="segment__option">
+          <input type="radio" name="mode" value="focus">
+          <span>Focus</span>
+        </label>
+        <label class="segment__option">
+          <input type="radio" name="mode" value="refocus">
+          <span>Refocus</span>
+        </label>
+        <label class="segment__option">
+          <input type="radio" name="mode" value="calm">
+          <span>Calm</span>
+        </label>
       </section>
 
-      <!-- Stats (optional) -->
       <section class="stats">
-        <div class="stat-item">
-          <span class="stat-label">Tab switches:</span>
-          <span class="stat-value" id="tab-switches">0</span>
+        <div class="stat">
+          <span class="stat__label">Tab switches</span>
+          <span class="stat__value" id="tab-switches">0</span>
         </div>
-        <div class="stat-item">
-          <span class="stat-label">Session time:</span>
-          <span class="stat-value" id="session-time">0m</span>
+        <div class="stat">
+          <span class="stat__label">Session</span>
+          <span class="stat__value" id="session-time">0m</span>
+        </div>
+        <div class="stat stat--badge" id="voice-indicator" hidden>
+          <span class="stat__label">Voice</span>
+          <span class="stat__value" id="voice-status">Off</span>
         </div>
       </section>
     </main>
 
-    <!-- Sponsors Footer -->
-    <footer class="footer">
-      <div class="sponsors">
-        <span class="sponsors-label">Powered by:</span>
-        <div class="sponsor-logos">
-          <a href="https://docs.runcaptain.com/" target="_blank" class="sponsor-link" title="Captain AI">Captain</a>
-          <a href="https://metorial.com" target="_blank" class="sponsor-link" title="Metorial AI">Metorial</a>
-          <a href="https://www.coval.dev/" target="_blank" class="sponsor-link" title="Coval AI">Coval</a>
-        </div>
-      </div>
+    <footer class="popup__footer">
+      <p class="popup__hint">Tap play or say “play” when voice control is enabled.</p>
     </footer>
   </div>
 
