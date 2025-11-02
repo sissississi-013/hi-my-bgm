@@ -3,72 +3,100 @@
  * Tracks tab activations and sends events to content scripts
  */
 
-let tabSwitchCount = 0;
-let lastResetTime = Date.now();
+const HISTORY_WINDOW_MS = 60000;
+const MID_WINDOW_MS = 30000;
+const SHORT_WINDOW_MS = 10000;
+const BURST_THRESHOLD = 5;
+const SHORT_BURST_THRESHOLD = 3;
 
-// Reset counter every 10 seconds
-const RESET_INTERVAL = 10000;
+let switchHistory = [];
 
-// Listen for tab activations
 chrome.tabs.onActivated.addListener((activeInfo) => {
   const now = Date.now();
+  prune(now);
 
-  // Auto-reset counter if past interval
-  if (now - lastResetTime > RESET_INTERVAL) {
-    tabSwitchCount = 0;
-    lastResetTime = now;
-  }
-
-  tabSwitchCount++;
-
-  console.log('[HMB:tab-activity] Tab switched, count:', tabSwitchCount);
-
-  // Notify content scripts on the active tab
-  chrome.tabs.sendMessage(activeInfo.tabId, {
-    type: 'TAB_SWITCHED',
-    payload: {
-      count: tabSwitchCount,
-      timestamp: now
-    }
-  }).catch((err) => {
-    // Content script might not be loaded yet, ignore
+  switchHistory.push({
+    time: now,
+    windowId: activeInfo.windowId,
+    tabId: activeInfo.tabId
   });
-});
 
-// Also track when tabs are updated (page navigations)
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.active) {
-    // Inject content script if needed (for dynamic pages)
-    chrome.scripting.executeScript({
-      target: { tabId },
-      files: ['content/overlay.js']
-    }).catch((err) => {
-      // Already injected or permission denied, ignore
+  const stats = computeStats(activeInfo.windowId, now);
+
+  sendMessage(activeInfo.tabId, 'TAB_ACTIVITY', {
+    counts: stats.counts,
+    ratePerMin: stats.ratePerMin,
+    windowId: activeInfo.windowId,
+    timestamp: now
+  });
+
+  // Maintain backward compatibility for listeners expecting TAB_SWITCHED
+  sendMessage(activeInfo.tabId, 'TAB_SWITCHED', {
+    count: stats.counts.last60,
+    counts: stats.counts,
+    timestamp: now
+  });
+
+  if (stats.counts.last60 >= BURST_THRESHOLD || stats.counts.last10 >= SHORT_BURST_THRESHOLD) {
+    sendMessage(activeInfo.tabId, 'TAB_BURST', {
+      countLast60s: stats.counts.last60,
+      countLast10s: stats.counts.last10,
+      ratePerMin: stats.ratePerMin,
+      timestamp: now
     });
   }
 });
 
-/**
- * Get current tab switch count
- */
-function getTabSwitchCount() {
-  const now = Date.now();
-  if (now - lastResetTime > RESET_INTERVAL) {
-    tabSwitchCount = 0;
-    lastResetTime = now;
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.active) {
+    chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content/overlay.js']
+    }, () => chrome.runtime.lastError); // ignore errors
   }
-  return tabSwitchCount;
+});
+
+function sendMessage(tabId, type, payload) {
+  if (!tabId) return;
+  try {
+    chrome.tabs.sendMessage(tabId, { type, payload }, () => chrome.runtime.lastError);
+  } catch (err) {
+    // Ignore tabs without the content script
+  }
 }
 
-/**
- * Reset tab switch counter
- */
+function computeStats(windowId, now = Date.now()) {
+  prune(now);
+
+  const entries = switchHistory.filter((entry) => entry.windowId === windowId);
+
+  const counts = {
+    last10: entries.filter((entry) => now - entry.time <= SHORT_WINDOW_MS).length,
+    last30: entries.filter((entry) => now - entry.time <= MID_WINDOW_MS).length,
+    last60: entries.filter((entry) => now - entry.time <= HISTORY_WINDOW_MS).length
+  };
+
+  const firstInWindow = entries.find((entry) => now - entry.time <= HISTORY_WINDOW_MS);
+  const spanMs = firstInWindow ? Math.max(now - firstInWindow.time, 1) : HISTORY_WINDOW_MS;
+  const ratePerMin = counts.last60 === 0 ? 0 : Number(((counts.last60 * 60000) / Math.min(spanMs, HISTORY_WINDOW_MS)).toFixed(1));
+
+  return { counts, ratePerMin };
+}
+
+function prune(now) {
+  const cutoff = now - HISTORY_WINDOW_MS;
+  switchHistory = switchHistory.filter((entry) => entry.time >= cutoff);
+}
+
+function getTabSwitchCount() {
+  prune(Date.now());
+  return switchHistory.length;
+}
+
 function resetTabSwitchCount() {
-  tabSwitchCount = 0;
-  lastResetTime = Date.now();
+  switchHistory = [];
 }
 
-// Make functions available to service worker
 if (typeof self !== 'undefined') {
   self.getTabSwitchCount = getTabSwitchCount;
   self.resetTabSwitchCount = resetTabSwitchCount;
