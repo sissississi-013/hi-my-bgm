@@ -1,0 +1,183 @@
+/**
+ * overlay.css - Bubble UI styling
+ * Floating 60px circle, bottom-right, non-intrusive
+ */
+
+.hmb-root {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  pointer-events: none;
+}
+
+.hmb-bubble {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+/* State colors */
+.hmb-bubble.focused {
+  background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%);
+}
+
+.hmb-bubble.neutral {
+  background: linear-gradient(135deg, #9e9e9e 0%, #757575 100%);
+}
+
+.hmb-bubble.distracted {
+  background: linear-gradient(135deg, #ff5722 0%, #e64a19 100%);
+}
+
+.hmb-bubble.idle {
+  background: linear-gradient(135deg, #4caf50 0%, #388e3c 100%);
+}
+
+/* Face emoji */
+.hmb-face {
+  font-size: 32px;
+  line-height: 1;
+  z-index: 2;
+  position: relative;
+}
+
+.hmb-bubble.focused .hmb-face::before {
+  content: '😄';
+}
+
+.hmb-bubble.neutral .hmb-face::before {
+  content: '😐';
+}
+
+.hmb-bubble.distracted .hmb-face::before {
+  content: '😟';
+}
+
+.hmb-bubble.idle .hmb-face::before {
+  content: '😴';
+}
+
+/* Halo animation */
+.hmb-halo {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  right: -5px;
+  bottom: -5px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0.3;
+  z-index: 1;
+}
+
+/* Halo animations for different states */
+.hmb-bubble.playing.focused .hmb-halo {
+  animation: pulseSteady 1s ease-in-out infinite;
+  color: #00bcd4;
+}
+
+.hmb-bubble.playing.neutral .hmb-halo {
+  animation: pulseSlow 2s ease-in-out infinite;
+  color: #9e9e9e;
+}
+
+.hmb-bubble.playing.distracted .hmb-halo {
+  animation: pulseSeek 0.8s ease-in-out infinite;
+  color: #ff5722;
+}
+
+.hmb-bubble.playing.idle .hmb-halo {
+  animation: pulseSlow 3s ease-in-out infinite;
+  color: #4caf50;
+}
+
+/* Keyframe animations */
+@keyframes pulseSteady {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.3;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.6;
+  }
+}
+
+@keyframes pulseSlow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.2;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.4;
+  }
+}
+
+@keyframes pulseSeek {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.25) rotate(180deg);
+    opacity: 0.7;
+  }
+}
+
+/* Status text (hidden by default, shown on hover) */
+.hmb-status {
+  position: absolute;
+  bottom: 70px;
+  right: 0;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.hmb-root:hover .hmb-status {
+  opacity: 1;
+}
+
+/* Hover effects */
+.hmb-bubble:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .hmb-bubble,
+  .hmb-halo,
+  .hmb-status {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .hmb-bubble {
+    border: 2px solid currentColor;
+  }
+}

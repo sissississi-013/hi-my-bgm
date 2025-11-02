@@ -1,0 +1,33 @@
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temp files
+*.log
+*.tmp
+
+# Chrome extension
+*.crx
+*.pem
+*.zip
+
+# Local test keys (don't commit API keys!)
+.env
+local-config.json
