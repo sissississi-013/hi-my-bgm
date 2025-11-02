@@ -50,6 +50,13 @@
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
     if (tab) {
+      // Check if content script can run on this tab
+      if (!canRunOnTab(tab)) {
+        console.log('[HMB:popup] Content script not available on this tab');
+        stateMessage.textContent = 'Not available on this page (chrome:// URLs restricted)';
+        return;
+      }
+
       try {
         // Send message to content script to get state
         const response = await chrome.tabs.sendMessage(tab.id, {
@@ -62,6 +69,8 @@
         }
       } catch (err) {
         console.warn('[HMB:popup] Could not get state from content script:', err);
+        // Content script might not be loaded yet
+        stateMessage.textContent = 'Loading... (refresh page if bubble not visible)';
       }
     }
 
@@ -125,22 +134,28 @@
   }
 
   async function handleToggleMusic() {
-    isPlaying = !isPlaying;
-
-    // Send message to content script
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    if (tab) {
-      try {
-        await chrome.tabs.sendMessage(tab.id, {
-          type: isPlaying ? 'PLAY_MUSIC' : 'PAUSE_MUSIC'
-        });
-      } catch (err) {
-        console.warn('[HMB:popup] Could not send message to content script:', err);
-      }
+    // Check if we can communicate with this tab
+    if (!tab || !canRunOnTab(tab)) {
+      alert('Music controls not available on this page. Please open a regular website.');
+      return;
     }
 
-    updateUI();
+    isPlaying = !isPlaying;
+
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: isPlaying ? 'PLAY_MUSIC' : 'PAUSE_MUSIC'
+      });
+      updateUI();
+    } catch (err) {
+      console.warn('[HMB:popup] Could not send message to content script:', err);
+      // Revert state if failed
+      isPlaying = !isPlaying;
+      updateUI();
+      stateMessage.textContent = 'Error: Please refresh the page and try again';
+    }
   }
 
   function handleOpenSettings() {
@@ -151,18 +166,24 @@
     const mode = event.target.value;
     console.log('[HMB:popup] Mode changed to:', mode);
 
-    // Send message to content script to change mode
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-    if (tab) {
-      try {
-        await chrome.tabs.sendMessage(tab.id, {
-          type: 'SET_MODE',
-          payload: { mode }
-        });
-      } catch (err) {
-        console.warn('[HMB:popup] Could not set mode:', err);
-      }
+    // Check if we can communicate with this tab
+    if (!tab || !canRunOnTab(tab)) {
+      alert('Mode controls not available on this page. Please open a regular website.');
+      // Reset to auto
+      document.querySelector('input[value="auto"]').checked = true;
+      return;
+    }
+
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'SET_MODE',
+        payload: { mode }
+      });
+    } catch (err) {
+      console.warn('[HMB:popup] Could not set mode:', err);
+      stateMessage.textContent = 'Error: Please refresh the page and try again';
     }
   }
 
@@ -170,6 +191,44 @@
     // Update session time
     const elapsed = Math.floor((Date.now() - sessionStart) / 60000); // minutes
     sessionTimeEl.textContent = elapsed > 0 ? `${elapsed}m` : '0m';
+  }
+
+  /**
+   * Check if content script can run on this tab
+   * Content scripts are restricted on chrome://, chrome-extension://, and other special pages
+   */
+  function canRunOnTab(tab) {
+    if (!tab || !tab.url) {
+      return false;
+    }
+
+    const url = tab.url.toLowerCase();
+
+    // Restricted URL schemes
+    const restrictedSchemes = [
+      'chrome://',
+      'chrome-extension://',
+      'edge://',
+      'about:',
+      'file://', // Unless user enabled it in extension settings
+      'view-source:',
+      'data:',
+      'javascript:'
+    ];
+
+    // Check if URL starts with any restricted scheme
+    for (const scheme of restrictedSchemes) {
+      if (url.startsWith(scheme)) {
+        return false;
+      }
+    }
+
+    // Chrome Web Store is also restricted
+    if (url.includes('chrome.google.com/webstore')) {
+      return false;
+    }
+
+    return true;
   }
 
 })();
