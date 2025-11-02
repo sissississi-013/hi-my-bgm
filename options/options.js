@@ -15,11 +15,22 @@
   const bubblePosition = document.getElementById('bubble-position');
   const colorTheme = document.getElementById('color-theme');
 
+  const allowPageText = document.getElementById('allow-page-text');
+  const allowTypedText = document.getElementById('allow-typed-text');
+
   const useYouTube = document.getElementById('use-youtube');
   const useSpotify = document.getElementById('use-spotify');
   const spotifyConfig = document.getElementById('spotify-config');
   const spotifyClientId = document.getElementById('spotify-client-id');
   const spotifyRedirectUri = document.getElementById('spotify-redirect-uri');
+
+  const useMusicHero = document.getElementById('use-musichero');
+  const musicHeroConfig = document.getElementById('musichero-config');
+  const musicHeroApiUrl = document.getElementById('musichero-api-url');
+  const musicHeroApiKey = document.getElementById('musichero-api-key');
+  const musicHeroInstrumental = document.getElementById('musichero-instrumental');
+  const musicHeroDuration = document.getElementById('musichero-duration');
+  const allowLyricHook = document.getElementById('allow-lyric-hook');
 
   const useCaptain = document.getElementById('use-captain');
   const captainConfig = document.getElementById('captain-config');
@@ -36,6 +47,8 @@
   const covalApiUrl = document.getElementById('coval-api-url');
   const covalApiKey = document.getElementById('coval-api-key');
   const covalVoiceId = document.getElementById('coval-voice-id');
+
+  const useVoiceCoach = document.getElementById('use-voice-coach');
 
   const useOpenAI = document.getElementById('use-openai');
   const openaiConfig = document.getElementById('openai-config');
@@ -68,6 +81,10 @@
     // Toggle nested inputs visibility
     useSpotify.addEventListener('change', () => {
       spotifyConfig.classList.toggle('active', useSpotify.checked);
+    });
+
+    useMusicHero.addEventListener('change', () => {
+      musicHeroConfig.classList.toggle('active', useMusicHero.checked);
     });
 
     useCaptain.addEventListener('change', () => {
@@ -107,13 +124,29 @@
       bubblePosition.value = result.bubblePosition || 'bottom-right';
       colorTheme.value = result.colorTheme || 'cool';
 
+      // Context permissions
+      allowPageText.checked = result.HMB_ALLOW_PAGE_CONTEXT !== false;
+      allowTypedText.checked = result.HMB_ALLOW_TYPED_CUES !== false;
+
       // Music
       useYouTube.checked = result.HMB_USE_YOUTUBE !== false;
       useSpotify.checked = result.HMB_USE_SPOTIFY || false;
       spotifyClientId.value = result.SPOTIFY_CLIENT_ID || '';
       spotifyRedirectUri.value = result.SPOTIFY_REDIRECT_URI || '';
+      spotifyConfig.classList.remove('active');
       if (useSpotify.checked) {
         spotifyConfig.classList.add('active');
+      }
+
+      useMusicHero.checked = result.HMB_USE_MUSICHERO || false;
+      musicHeroApiUrl.value = result.MUSICHERO_API_URL || '';
+      musicHeroApiKey.value = result.MUSICHERO_API_KEY || '';
+      musicHeroInstrumental.checked = result.MUSICHERO_INSTRUMENTAL_ONLY !== false;
+      musicHeroDuration.value = result.MUSICHERO_DEFAULT_DURATION || 30;
+      allowLyricHook.checked = result.HMB_ALLOW_LYRIC_HOOK !== false;
+      musicHeroConfig.classList.remove('active');
+      if (useMusicHero.checked) {
+        musicHeroConfig.classList.add('active');
       }
 
       // Captain AI
@@ -137,9 +170,12 @@
       covalApiUrl.value = result.COVAL_API_URL || 'https://api.coval.dev';
       covalApiKey.value = result.COVAL_API_KEY || '';
       covalVoiceId.value = result.COVAL_VOICE_ID || '';
+      covalConfig.classList.remove('active');
       if (useCoval.checked) {
         covalConfig.classList.add('active');
       }
+
+      useVoiceCoach.checked = result.HMB_USE_VOICE_COACH !== false;
 
       // OpenAI
       useOpenAI.checked = result.HMB_USE_OPENAI || false;
@@ -167,11 +203,21 @@
       bubblePosition: bubblePosition.value,
       colorTheme: colorTheme.value,
 
+      // Context permissions
+      HMB_ALLOW_PAGE_CONTEXT: allowPageText.checked,
+      HMB_ALLOW_TYPED_CUES: allowTypedText.checked,
+
       // Music
       HMB_USE_YOUTUBE: useYouTube.checked,
       HMB_USE_SPOTIFY: useSpotify.checked,
       SPOTIFY_CLIENT_ID: spotifyClientId.value,
       SPOTIFY_REDIRECT_URI: spotifyRedirectUri.value,
+      HMB_USE_MUSICHERO: useMusicHero.checked,
+      MUSICHERO_API_URL: musicHeroApiUrl.value,
+      MUSICHERO_API_KEY: musicHeroApiKey.value,
+      MUSICHERO_INSTRUMENTAL_ONLY: musicHeroInstrumental.checked,
+      MUSICHERO_DEFAULT_DURATION: parseInt(musicHeroDuration.value || '30', 10),
+      HMB_ALLOW_LYRIC_HOOK: allowLyricHook.checked,
 
       // Captain AI
       HMB_USE_CAPTAIN: useCaptain.checked,
@@ -188,6 +234,7 @@
       COVAL_API_URL: covalApiUrl.value,
       COVAL_API_KEY: covalApiKey.value,
       COVAL_VOICE_ID: covalVoiceId.value,
+      HMB_USE_VOICE_COACH: useVoiceCoach.checked,
 
       // OpenAI
       HMB_USE_OPENAI: useOpenAI.checked,

@@ -190,6 +190,27 @@ body {
   accent-color: #667eea;
 }
 
+.inline-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.checkbox-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.checkbox-inline input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #764ba2;
+}
+
 .link {
   color: #667eea;
   text-decoration: none;

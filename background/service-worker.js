@@ -22,7 +22,16 @@ chrome.runtime.onInstalled.addListener((details) => {
         HMB_USE_COVAL: false,
         HMB_USE_OPENAI: false,
         HMB_USE_ANTHROPIC: false,
-        HMB_USE_SPOTIFY: false
+        HMB_USE_SPOTIFY: false,
+        HMB_USE_MUSICHERO: false,
+        MUSICHERO_API_URL: '',
+        MUSICHERO_API_KEY: '',
+        MUSICHERO_INSTRUMENTAL_ONLY: true,
+        MUSICHERO_DEFAULT_DURATION: 30,
+        HMB_ALLOW_LYRIC_HOOK: true,
+        HMB_ALLOW_PAGE_CONTEXT: true,
+        HMB_ALLOW_TYPED_CUES: true,
+        HMB_USE_VOICE_COACH: true
       });
     }
   });
