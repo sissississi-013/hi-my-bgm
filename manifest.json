@@ -41,7 +41,13 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["content/overlay.html", "content/expressions.svg"],
+      "resources": [
+        "content/overlay.html",
+        "content/expressions.svg",
+        "content/faces.svg",
+        "content/planet-bubble.js",
+        "content/audio-analyzer.js"
+      ],
       "matches": ["<all_urls>"]
     }
   ]

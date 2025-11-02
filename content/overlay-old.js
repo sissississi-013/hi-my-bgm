@@ -1,6 +1,6 @@
 /**
- * overlay.js - Content script with integrated Planet Bubble
- * Runs on every page, observes behavior, renders living planet with audio reactivity
+ * overlay.js - Content script that injects the bubble UI
+ * Runs on every page, observes behavior, updates bubble state
  */
 
 (async function() {
@@ -12,49 +12,12 @@
   }
   window.__HMB_INITIALIZED__ = true;
 
-  console.log('[HMB:overlay] Initializing Planet Bubble on', window.location.hostname);
+  console.log('[HMB:overlay] Initializing on', window.location.hostname);
 
-  // Load planet bubble and audio analyzer modules dynamically
-  let PlanetBubble, AudioAnalyzer;
-  try {
-    const planetModule = await import(chrome.runtime.getURL('content/planet-bubble.js'));
-    const audioModule = await import(chrome.runtime.getURL('content/audio-analyzer.js'));
-    PlanetBubble = planetModule.PlanetBubble || planetModule.default;
-    AudioAnalyzer = audioModule.AudioAnalyzer || audioModule.default;
-    console.log('[HMB:overlay] Modules loaded successfully');
-  } catch (err) {
-    console.error('[HMB:overlay] Failed to load modules:', err);
-    // Continue with basic functionality
-  }
+  // Dynamically import modules (use chrome.runtime.getURL for extension resources)
+  const baseUrl = chrome.runtime.getURL('');
 
-  // Load faces SVG definitions
-  let facesLoaded = false;
-  try {
-    const facesResponse = await fetch(chrome.runtime.getURL('content/faces.svg'));
-    const facesText = await facesResponse.text();
-    const facesContainer = document.createElement('div');
-    facesContainer.style.display = 'none';
-    facesContainer.innerHTML = facesText;
-
-    // Wait for body
-    if (!document.body) {
-      await new Promise(resolve => {
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', resolve);
-        } else {
-          resolve();
-        }
-      });
-    }
-
-    document.body.appendChild(facesContainer);
-    facesLoaded = true;
-    console.log('[HMB:overlay] Faces SVG loaded');
-  } catch (err) {
-    console.warn('[HMB:overlay] Failed to load faces:', err);
-  }
-
-  // Create state management
+  // Create state management (inline minimal version)
   let state = {
     raw: {
       lastInputTime: Date.now(),
@@ -65,7 +28,7 @@
     isPlaying: false
   };
 
-  // Create bubble element with new planet structure
+  // Create bubble element
   const bubble = document.createElement('div');
   bubble.id = 'hmb-root';
   bubble.className = 'hmb-root';
@@ -73,14 +36,9 @@
   bubble.setAttribute('role', 'status');
 
   bubble.innerHTML = `
-    <div class="hmb-bubble neutral" id="hmb-bubble" aria-label="Focus companion planet">
-      <div class="hmb-planet-container" id="hmb-planet-container"></div>
-      <div class="hmb-face" id="hmb-face" aria-hidden="true">
-        <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-          <use id="hmb-face-use" href="#face-neutral" />
-        </svg>
-      </div>
-      <div class="hmb-halo" id="hmb-halo" aria-hidden="true"></div>
+    <div class="hmb-bubble neutral" id="hmb-bubble">
+      <div class="hmb-face" id="hmb-face"></div>
+      <div class="hmb-halo" id="hmb-halo"></div>
     </div>
     <div class="hmb-status" id="hmb-status">neutral</div>
   `;
@@ -100,43 +58,6 @@
 
   const bubbleEl = document.getElementById('hmb-bubble');
   const statusEl = document.getElementById('hmb-status');
-  const planetContainer = document.getElementById('hmb-planet-container');
-  const faceUse = document.getElementById('hmb-face-use');
-  const faceEl = document.getElementById('hmb-face');
-
-  // Initialize Planet Bubble
-  let planet = null;
-  if (PlanetBubble && planetContainer) {
-    try {
-      planet = new PlanetBubble(planetContainer, { size: 72 });
-      console.log('[HMB:overlay] Planet initialized');
-    } catch (err) {
-      console.error('[HMB:overlay] Planet init failed:', err);
-    }
-  }
-
-  // Initialize Audio Analyzer
-  let audioAnalyzer = null;
-  if (AudioAnalyzer) {
-    try {
-      audioAnalyzer = new AudioAnalyzer();
-      audioAnalyzer.init();
-      console.log('[HMB:overlay] Audio analyzer initialized');
-
-      // Try to connect to YouTube player periodically
-      const connectAudio = () => {
-        const youtubeIframe = document.querySelector('iframe[id="hmb-youtube-player"]');
-        if (youtubeIframe && audioAnalyzer) {
-          audioAnalyzer.connectToYouTube(youtubeIframe);
-        }
-      };
-
-      // Check every 2 seconds for YouTube player
-      setInterval(connectAudio, 2000);
-    } catch (err) {
-      console.error('[HMB:overlay] Audio analyzer init failed:', err);
-    }
-  }
 
   // Initialize observation (privacy-safe: timestamps only)
   document.addEventListener('keydown', () => {
@@ -179,7 +100,6 @@
           Music.play(mode).then(() => {
             state.isPlaying = true;
             bubbleEl.classList.add('playing');
-            if (planet) planet.setPlaying(true);
             sendResponse({ success: true });
           }).catch(err => {
             console.error('[HMB:overlay] Play failed:', err);
@@ -195,7 +115,6 @@
           Music.stop();
           state.isPlaying = false;
           bubbleEl.classList.remove('playing');
-          if (planet) planet.setPlaying(false);
         }
         sendResponse({ success: true });
         break;
@@ -213,7 +132,6 @@
             Music.play(payload.mode).then(() => {
               state.isPlaying = true;
               bubbleEl.classList.add('playing');
-              if (planet) planet.setPlaying(true);
               sendResponse({ success: true });
             }).catch(err => {
               sendResponse({ success: false, error: err.message });
@@ -252,7 +170,7 @@
         console.log('[HMB:overlay] State changed:', state.label, '->', newLabel);
         state.label = newLabel;
 
-        // Update bubble UI (planet + face)
+        // Update bubble UI
         updateBubble(newLabel);
 
         // Generate supportive message
@@ -261,32 +179,13 @@
 
         // Speak message if voice enabled
         if (Voice && changed) {
-          // Set speaking state for audio ducking
-          if (audioAnalyzer) audioAnalyzer.setSpeaking(true);
-
           Voice.speak(message).catch(err => {
             console.warn('[HMB:overlay] Voice failed:', err);
-          }).finally(() => {
-            if (audioAnalyzer) {
-              setTimeout(() => audioAnalyzer.setSpeaking(false), 500);
-            }
           });
         }
 
         // Update music
         await applyMusic(newLabel, Music);
-      }
-
-      // Update audio beat (continuous, even without state change)
-      if (state.isPlaying && audioAnalyzer && planet) {
-        const beat = audioAnalyzer.analyze();
-        planet.setBeat(beat);
-
-        // Add beat pulse class on strong beats
-        if (beat > 0.7) {
-          bubbleEl.classList.add('beating');
-          setTimeout(() => bubbleEl.classList.remove('beating'), 150);
-        }
       }
     } catch (err) {
       console.error('[HMB:overlay] Tick error:', err);
@@ -297,7 +196,7 @@
   tick();
   setInterval(tick, TICK_INTERVAL);
 
-  console.log('[HMB:overlay] Planet Bubble active, loop running every 10s');
+  console.log('[HMB:overlay] Bubble active, loop running every 10s');
 
   // Helper functions
 
@@ -323,23 +222,6 @@
     if (state.isPlaying) {
       bubbleEl.classList.add('playing');
     }
-
-    // Update planet mood
-    if (planet) {
-      planet.setMood(label);
-    }
-
-    // Update face SVG with transition
-    if (faceUse && facesLoaded) {
-      faceEl.classList.add('transitioning');
-
-      setTimeout(() => {
-        faceUse.setAttribute('href', `#face-${label}`);
-        setTimeout(() => {
-          faceEl.classList.remove('transitioning');
-        }, 50);
-      }, 150);
-    }
   }
 
   async function applyMusic(label, musicAdapter) {
@@ -350,12 +232,10 @@
       await musicAdapter.play(mode);
       state.isPlaying = true;
       bubbleEl.classList.add('playing');
-      if (planet) planet.setPlaying(true);
     } catch (err) {
       console.warn('[HMB:overlay] Music play failed:', err);
       state.isPlaying = false;
       bubbleEl.classList.remove('playing');
-      if (planet) planet.setPlaying(false);
     }
   }
 
