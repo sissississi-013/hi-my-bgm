@@ -178,6 +178,13 @@ export class PlanetBubble {
     this.time = 0;
     this.isPlaying = false;
     this.moodClasses = MOOD_NAMES;
+    this.paletteOverride = null;
+
+    const baseMood = MOODS[this.mood];
+    this.shaderState = {
+      current: { ...baseMood },
+      target: { ...baseMood }
+    };
 
     this.canvas = null;
     this.gl = null;
@@ -366,18 +373,21 @@ export class PlanetBubble {
     if (!this.gl || !this.program) return;
 
     const gl = this.gl;
-    const mood = MOODS[this.mood] || MOODS.neutral;
+    const palette = this.getActivePalette();
+
+    this.easeShaderState(palette);
+    const shaderValues = this.shaderState.current;
 
     // Update time
     this.time += 1 / this.targetFPS;
 
     // Set uniforms
     gl.uniform1f(this.uniforms.uTime, this.time);
-    gl.uniform1f(this.uniforms.uHue, mood.hue);
-    gl.uniform1f(this.uniforms.uFlow, mood.flow);
-    gl.uniform1f(this.uniforms.uDistort, mood.distort);
-    gl.uniform1f(this.uniforms.uLuma, mood.luma);
-    gl.uniform1f(this.uniforms.uBeat, this.beat * mood.beatAmt);
+    gl.uniform1f(this.uniforms.uHue, shaderValues.hue);
+    gl.uniform1f(this.uniforms.uFlow, shaderValues.flow);
+    gl.uniform1f(this.uniforms.uDistort, shaderValues.distort);
+    gl.uniform1f(this.uniforms.uLuma, shaderValues.luma);
+    gl.uniform1f(this.uniforms.uBeat, this.beat * shaderValues.beatAmt);
 
     // Clear and draw
     gl.clearColor(0, 0, 0, 0);
@@ -394,16 +404,8 @@ export class PlanetBubble {
         this.container.classList.add(newMood);
       }
 
-      if (!this.useWebGL && this.canvas) {
-        const colors = MOODS[newMood].colors;
-        this.canvas.style.setProperty('--planet-primary', colors.primary);
-        this.canvas.style.setProperty('--planet-secondary', colors.secondary);
-        if (colors.base) {
-          this.canvas.style.setProperty('--planet-tertiary', colors.base);
-        } else {
-          this.canvas.style.removeProperty('--planet-tertiary');
-        }
-      }
+      this.updateShaderTargets();
+      this.applyPaletteToCSS();
     }
   }
 
@@ -420,6 +422,109 @@ export class PlanetBubble {
       this.container.classList.toggle('planet-playing', !!playing);
       if (!playing) {
         this.container.style.setProperty('--planet-beat', '0');
+      }
+    }
+  }
+
+  setPaletteOverride(palette = null) {
+    if (palette) {
+      this.paletteOverride = {
+        ...palette,
+        colors: {
+          ...(MOODS[this.mood]?.colors || {}),
+          ...(palette.colors || {})
+        }
+      };
+    } else {
+      this.paletteOverride = null;
+    }
+
+    this.updateShaderTargets();
+    this.applyPaletteToCSS();
+  }
+
+  getActivePalette() {
+    const mood = MOODS[this.mood] || MOODS.neutral;
+    if (!this.paletteOverride) {
+      return mood;
+    }
+
+    return {
+      ...mood,
+      ...this.paletteOverride,
+      colors: {
+        ...(mood.colors || {}),
+        ...(this.paletteOverride.colors || {})
+      }
+    };
+  }
+
+  updateShaderTargets() {
+    const palette = this.getActivePalette();
+    if (!this.shaderState) {
+      this.shaderState = {
+        current: { ...palette },
+        target: { ...palette }
+      };
+      return;
+    }
+
+    this.shaderState.target = {
+      hue: palette.hue,
+      flow: palette.flow,
+      distort: palette.distort,
+      luma: palette.luma,
+      beatAmt: palette.beatAmt
+    };
+  }
+
+  easeShaderState(palette) {
+    if (!this.shaderState) {
+      this.shaderState = {
+        current: { ...palette },
+        target: { ...palette }
+      };
+      return;
+    }
+
+    const smoothing = 0.08;
+    const fields = ['hue', 'flow', 'distort', 'luma', 'beatAmt'];
+    const current = this.shaderState.current;
+    const target = this.shaderState.target;
+
+    fields.forEach((key) => {
+      const targetValue = target[key] ?? palette[key];
+      const currentValue = current[key] ?? palette[key];
+      current[key] = currentValue + (targetValue - currentValue) * smoothing;
+    });
+  }
+
+  applyPaletteToCSS() {
+    if (!this.container) return;
+
+    const palette = this.getActivePalette();
+    const colors = palette.colors || {};
+
+    const setVar = (name, value) => {
+      if (value) {
+        this.container.style.setProperty(name, value);
+      } else {
+        this.container.style.removeProperty(name);
+      }
+    };
+
+    setVar('--planet-primary', colors.primary);
+    setVar('--planet-secondary', colors.secondary);
+    setVar('--planet-tertiary', colors.base || colors.tertiary);
+    setVar('--planet-highlight', colors.primary);
+
+    if (!this.useWebGL && this.canvas) {
+      this.canvas.style.setProperty('--planet-primary', colors.primary || 'rgba(126, 158, 255, 0.72)');
+      this.canvas.style.setProperty('--planet-secondary', colors.secondary || 'rgba(94, 220, 255, 0.48)');
+      if (colors.base || colors.tertiary) {
+        this.canvas.style.setProperty('--planet-tertiary', colors.base || colors.tertiary);
+      } else {
+        this.canvas.style.removeProperty('--planet-tertiary');
       }
     }
   }

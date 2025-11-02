@@ -65,6 +65,34 @@
   let latestCues = null;
   let currentConfig = {};
 
+  const FALLBACK_MESSAGES = {
+    focused: [
+      "You're in the zone! Keep going.",
+      "Great focus. You've got this.",
+      "Flowing nicely. Stay with it."
+    ],
+    neutral: [
+      "Taking it steady. All good.",
+      "Finding your rhythm.",
+      "No rush, you're doing fine."
+    ],
+    distracted: [
+      "Lots happening. Let's refocus gently.",
+      "It's okay. One thing at a time.",
+      "Breathe. You can return to center."
+    ],
+    idle: [
+      "Taking a break? That's wise.",
+      "Rest is part of the process.",
+      "Recharging. Come back when ready."
+    ],
+    upbeat: [
+      "Energy rising—ride the wave!",
+      "All smiles here. Let's go!",
+      "Bright vibes, bright focus."
+    ]
+  };
+
   let tickRunning = false;
   let tickQueued = false;
 
@@ -84,7 +112,7 @@
   bubble.setAttribute('role', 'status');
 
   bubble.innerHTML = `
-    <div class="hmb-bubble neutral" id="hmb-bubble" aria-label="Focus companion planet">
+    <div class="hmb-bubble neutral" id="hmb-bubble" aria-label="Focus companion planet" tabindex="0">
       <div class="hmb-halo" id="hmb-halo" aria-hidden="true"></div>
       <div class="hmb-planet-container" id="hmb-planet-container">
         <div class="hmb-planet-glow" aria-hidden="true"></div>
@@ -129,7 +157,14 @@
         </svg>
       </div>
     </div>
-    <div class="hmb-status" id="hmb-status">neutral</div>
+    <div class="hmb-info-panel" id="hmb-info" role="tooltip" aria-live="polite" aria-hidden="true">
+      <div class="hmb-info-panel__title" id="hmb-info-title"></div>
+      <div class="hmb-info-panel__status-row">
+        <span class="hmb-info-panel__label" id="hmb-info-label">Neutral</span>
+        <span class="hmb-info-panel__message" id="hmb-info-message">Taking it steady. All good.</span>
+      </div>
+      <div class="hmb-info-panel__meta" id="hmb-info-meta"></div>
+    </div>
   `;
 
   // Wait for body to be available
@@ -146,9 +181,315 @@
   document.body.appendChild(bubble);
 
   const bubbleEl = document.getElementById('hmb-bubble');
-  const statusEl = document.getElementById('hmb-status');
+  const infoPanel = document.getElementById('hmb-info');
+  const infoTitleEl = document.getElementById('hmb-info-title');
+  const statusLabelEl = document.getElementById('hmb-info-label');
+  const statusMessageEl = document.getElementById('hmb-info-message');
+  const statusMetaEl = document.getElementById('hmb-info-meta');
   const planetContainer = document.getElementById('hmb-planet-container');
   const faceEl = document.getElementById('hmb-face');
+
+  const rootEl = bubble;
+  const POSITION_STORAGE_KEY = 'hmb-planet-position';
+  const MIN_DRAG_MARGIN = 18;
+  let currentPosition = null;
+  const dragState = {
+    active: false,
+    pointerId: null,
+    offsetX: 0,
+    offsetY: 0
+  };
+
+  updateStatus(state.lastStatusMessage);
+
+  applyStoredPosition();
+  setInfoVisibility(false);
+
+  if (bubbleEl) {
+    bubbleEl.addEventListener('mouseenter', handleInfoHover, { passive: true });
+    bubbleEl.addEventListener('mouseleave', handleInfoLeave, { passive: true });
+    bubbleEl.addEventListener('focus', handleInfoHover, { passive: true });
+    bubbleEl.addEventListener('blur', handleInfoLeave, { passive: true });
+    bubbleEl.addEventListener('pointerdown', handlePointerDown);
+    bubbleEl.addEventListener('pointermove', handlePointerMove);
+    bubbleEl.addEventListener('pointerup', handlePointerUp);
+    bubbleEl.addEventListener('pointercancel', handlePointerUp);
+  }
+
+  if (infoPanel) {
+    infoPanel.addEventListener('mouseenter', handleInfoHover, { passive: true });
+    infoPanel.addEventListener('mouseleave', handleInfoLeave, { passive: true });
+  }
+
+  window.addEventListener('resize', handleResize, { passive: true });
+
+  const DOMAIN_THEME_PRESETS = [
+    { test: host => /(^|\.)news\.ycombinator\.com$/i.test(host), color: '#ff6600' },
+    { test: host => /(^|\.)github\.com$/i.test(host), color: '#6f42c1' },
+    { test: host => /(^|\.)youtube\.com$/i.test(host), color: '#ff0000' },
+    { test: host => /(^|\.)wikipedia\.org$/i.test(host), color: '#36a7e9' }
+  ];
+
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  function parseColor(value) {
+    if (!value || typeof value !== 'string') return null;
+    const input = value.trim().toLowerCase();
+
+    if (input.startsWith('#')) {
+      const hex = input.slice(1);
+      const normalized = hex.length === 3
+        ? hex.split('').map(char => char + char).join('')
+        : hex.length === 8
+          ? hex.slice(0, 6)
+          : hex;
+      if (normalized.length !== 6) return null;
+      const num = parseInt(normalized, 16);
+      return {
+        r: (num >> 16) & 255,
+        g: (num >> 8) & 255,
+        b: num & 255
+      };
+    }
+
+    const rgbMatch = input.match(/^rgba?\(([^)]+)\)$/);
+    if (rgbMatch) {
+      const parts = rgbMatch[1].split(',').map(part => part.trim());
+      if (parts.length >= 3) {
+        const r = parseFloat(parts[0]);
+        const g = parseFloat(parts[1]);
+        const b = parseFloat(parts[2]);
+        if ([r, g, b].every(component => Number.isFinite(component))) {
+          const alpha = parts[3] !== undefined ? parseFloat(parts[3]) : 1;
+          if (!Number.isFinite(alpha) || alpha <= 0) return null;
+          return { r, g, b };
+        }
+      }
+    }
+
+    const hslMatch = input.match(/^hsla?\(([^)]+)\)$/);
+    if (hslMatch) {
+      const parts = hslMatch[1].split(',').map(part => part.trim());
+      if (parts.length >= 3) {
+        const h = parseFloat(parts[0]);
+        const s = parseFloat(parts[1]);
+        const l = parseFloat(parts[2]);
+        if ([h, s, l].every(component => Number.isFinite(component))) {
+          const alpha = parts[3] !== undefined ? parseFloat(parts[3]) : 1;
+          if (!Number.isFinite(alpha) || alpha <= 0) return null;
+          return hslToRgb({ h, s, l });
+        }
+      }
+    }
+
+    return null;
+  }
+
+  function rgbToHsl({ r, g, b }) {
+    const rNorm = clamp(r, 0, 255) / 255;
+    const gNorm = clamp(g, 0, 255) / 255;
+    const bNorm = clamp(b, 0, 255) / 255;
+
+    const max = Math.max(rNorm, gNorm, bNorm);
+    const min = Math.min(rNorm, gNorm, bNorm);
+    const delta = max - min;
+
+    let h = 0;
+    let s = 0;
+    const l = (max + min) / 2;
+
+    if (delta !== 0) {
+      s = delta / (1 - Math.abs(2 * l - 1));
+      switch (max) {
+        case rNorm:
+          h = 60 * (((gNorm - bNorm) / delta) % 6);
+          break;
+        case gNorm:
+          h = 60 * (((bNorm - rNorm) / delta) + 2);
+          break;
+        case bNorm:
+          h = 60 * (((rNorm - gNorm) / delta) + 4);
+          break;
+      }
+    }
+
+    if (h < 0) h += 360;
+
+    return { h, s, l };
+  }
+
+  function hslToRgb({ h, s, l }) {
+    const hue = ((h % 360) + 360) % 360;
+    const saturation = clamp(s, 0, 100) / 100;
+    const lightness = clamp(l, 0, 100) / 100;
+
+    const c = (1 - Math.abs(2 * lightness - 1)) * saturation;
+    const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+    const m = lightness - c / 2;
+
+    let r1 = 0;
+    let g1 = 0;
+    let b1 = 0;
+
+    if (0 <= hue && hue < 60) {
+      r1 = c; g1 = x; b1 = 0;
+    } else if (60 <= hue && hue < 120) {
+      r1 = x; g1 = c; b1 = 0;
+    } else if (120 <= hue && hue < 180) {
+      r1 = 0; g1 = c; b1 = x;
+    } else if (180 <= hue && hue < 240) {
+      r1 = 0; g1 = x; b1 = c;
+    } else if (240 <= hue && hue < 300) {
+      r1 = x; g1 = 0; b1 = c;
+    } else {
+      r1 = c; g1 = 0; b1 = x;
+    }
+
+    return {
+      r: Math.round((r1 + m) * 255),
+      g: Math.round((g1 + m) * 255),
+      b: Math.round((b1 + m) * 255)
+    };
+  }
+
+  function mixColors(color, target, factor) {
+    const t = clamp(factor, 0, 1);
+    return {
+      r: Math.round(color.r + (target.r - color.r) * t),
+      g: Math.round(color.g + (target.g - color.g) * t),
+      b: Math.round(color.b + (target.b - color.b) * t)
+    };
+  }
+
+  function toRgba(color, alpha = 1) {
+    return `rgba(${Math.round(color.r)}, ${Math.round(color.g)}, ${Math.round(color.b)}, ${alpha})`;
+  }
+
+  function detectPresetColor(hostname) {
+    for (const preset of DOMAIN_THEME_PRESETS) {
+      try {
+        if (preset.test(hostname)) {
+          const parsed = parseColor(preset.color);
+          if (parsed) {
+            return parsed;
+          }
+        }
+      } catch (err) {
+        console.warn('[HMB:overlay] Failed to evaluate preset theme', err);
+      }
+    }
+    return null;
+  }
+
+  function detectAccentColor() {
+    const host = window.location.hostname || '';
+
+    const preset = detectPresetColor(host);
+    if (preset) return preset;
+
+    const metaTheme = document.querySelector('meta[name="theme-color" i]');
+    if (metaTheme && metaTheme.content) {
+      const parsedMeta = parseColor(metaTheme.content);
+      if (parsedMeta) return parsedMeta;
+    }
+
+    if (document.body) {
+      const bodyBg = getComputedStyle(document.body).backgroundColor;
+      const parsedBg = parseColor(bodyBg);
+      if (parsedBg && !isNearNeutral(parsedBg)) {
+        return parsedBg;
+      }
+    }
+
+    const fallback = parseColor('#7e9dff');
+    return fallback;
+  }
+
+  function isNearNeutral(color) {
+    const tolerance = 16;
+    const maxComponent = Math.max(color.r, color.g, color.b);
+    const minComponent = Math.min(color.r, color.g, color.b);
+    return (maxComponent - minComponent) < tolerance;
+  }
+
+  function buildPlanetPalette(accentColor) {
+    let accent = accentColor;
+    if (typeof accent === 'string') {
+      accent = parseColor(accent);
+    }
+    if (!accent) {
+      accent = parseColor('#7e9dff');
+    }
+    const hsl = rgbToHsl(accent);
+
+    const bright = mixColors(accent, { r: 255, g: 255, b: 255 }, 0.25);
+    const brighter = mixColors(accent, { r: 255, g: 255, b: 255 }, 0.5);
+    const glow = mixColors(accent, { r: 255, g: 255, b: 255 }, 0.65);
+    const haloAlt = mixColors(accent, { r: 48, g: 60, b: 120 }, 0.4);
+    const depth = mixColors(accent, { r: 16, g: 20, b: 40 }, 0.75);
+
+    const faceStroke = mixColors(accent, { r: 255, g: 255, b: 255 }, 0.7);
+
+    return {
+      hue: (hsl.h % 360) / 360,
+      colors: {
+        primary: toRgba(bright, 0.86),
+        secondary: toRgba(brighter, 0.6),
+        base: toRgba(depth, 0.92),
+        halo: toRgba(glow, 0.7),
+        haloAlt: toRgba(haloAlt, 0.55),
+        faceStroke: toRgba(faceStroke, 0.95)
+      }
+    };
+  }
+
+  let lastThemeSignature = '';
+
+  function applyBubblePalette(palette) {
+    if (!bubbleEl || !palette) return;
+
+    const { colors } = palette;
+    const setVar = (el, name, value) => {
+      if (!el) return;
+      if (value) {
+        el.style.setProperty(name, value);
+      } else {
+        el.style.removeProperty(name);
+      }
+    };
+
+    setVar(bubbleEl, '--planet-primary', colors.primary);
+    setVar(bubbleEl, '--planet-secondary', colors.secondary);
+    setVar(bubbleEl, '--planet-tertiary', colors.base);
+    setVar(bubbleEl, '--planet-highlight', colors.primary);
+    setVar(bubbleEl, '--halo-color', colors.halo);
+    setVar(bubbleEl, '--halo-color-alt', colors.haloAlt);
+    setVar(bubbleEl, '--face-stroke', colors.faceStroke);
+
+    if (faceEl && colors.faceStroke) {
+      faceEl.style.setProperty('color', colors.faceStroke);
+      faceEl.style.setProperty('stroke', colors.faceStroke);
+    } else if (faceEl) {
+      faceEl.style.removeProperty('color');
+      faceEl.style.removeProperty('stroke');
+    }
+
+    if (planet) {
+      planet.setPaletteOverride(palette);
+    }
+  }
+
+  function updatePlanetTheme(reason = 'auto') {
+    const accent = detectAccentColor();
+    const signature = accent ? `${Math.round(accent.r)}-${Math.round(accent.g)}-${Math.round(accent.b)}` : 'default';
+    if (signature === lastThemeSignature) return;
+    lastThemeSignature = signature;
+
+    const palette = buildPlanetPalette(accent);
+    applyBubblePalette(palette);
+  }
 
   if (TextCues && TextCues.attachTextListeners) {
     TextCues.attachTextListeners();
@@ -157,10 +498,12 @@
   if (PageContext && PageContext.subscribe) {
     PageContext.subscribe((context) => {
       latestPage = context;
+      updateStatus(state.lastStatusMessage);
       requestImmediateTick('page-change');
     });
   } else if (PageContext && PageContext.getPageContext) {
     latestPage = PageContext.getPageContext();
+    updateStatus(state.lastStatusMessage);
   }
 
   if (TextCues && TextCues.subscribe) {
@@ -186,6 +529,14 @@
       console.error('[HMB:overlay] Planet init failed:', err);
     }
   }
+
+  updatePlanetTheme('initial');
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      setTimeout(() => updatePlanetTheme('visible'), 60);
+    }
+  }, { passive: true });
+  window.addEventListener('focus', () => updatePlanetTheme('focus'), { passive: true });
 
   // Initialize Audio Analyzer
   let audioAnalyzer = null;
@@ -257,6 +608,7 @@
           updateTabStats(payload);
         }
         requestImmediateTick('tab-switch');
+        updatePlanetTheme('tab-switch-message');
         break;
       }
       case 'TAB_BURST': {
@@ -452,6 +804,140 @@
   console.log('[HMB:overlay] Planet Bubble active, loop running every 10s');
 
   // Helper functions
+
+  function handleInfoHover(event) {
+    if (dragState.active) return;
+    setInfoVisibility(true);
+  }
+
+  function handleInfoLeave(event) {
+    if (dragState.active) return;
+    const related = event?.relatedTarget;
+    if (related && rootEl?.contains(related)) {
+      return;
+    }
+    setInfoVisibility(false);
+  }
+
+  function setInfoVisibility(visible) {
+    if (!rootEl) return;
+    if (visible) {
+      if (infoPanel) {
+        const panelHeight = infoPanel.offsetHeight || 0;
+        const rect = rootEl.getBoundingClientRect();
+        const fitsAbove = rect.top >= panelHeight + MIN_DRAG_MARGIN;
+        if (fitsAbove) {
+          rootEl.classList.remove('hmb-root--info-below');
+        } else {
+          rootEl.classList.add('hmb-root--info-below');
+        }
+      }
+      rootEl.classList.add('hmb-root--show-info');
+      infoPanel?.setAttribute('aria-hidden', 'false');
+    } else {
+      rootEl.classList.remove('hmb-root--show-info');
+      rootEl.classList.remove('hmb-root--info-below');
+      infoPanel?.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function handlePointerDown(event) {
+    if (event.button !== 0 || dragState.active) return;
+    dragState.active = true;
+    dragState.pointerId = event.pointerId;
+    const rect = rootEl.getBoundingClientRect();
+    dragState.offsetX = event.clientX - rect.left;
+    dragState.offsetY = event.clientY - rect.top;
+    rootEl.classList.add('hmb-root--dragging');
+    setInfoVisibility(false);
+    try {
+      bubbleEl?.setPointerCapture(event.pointerId);
+    } catch (err) {
+      console.debug('[HMB:overlay] Pointer capture unavailable:', err);
+    }
+  }
+
+  function handlePointerMove(event) {
+    if (!dragState.active || dragState.pointerId !== event.pointerId) return;
+    const nextX = event.clientX - dragState.offsetX;
+    const nextY = event.clientY - dragState.offsetY;
+    setRootPosition(nextX, nextY);
+  }
+
+  function handlePointerUp(event) {
+    if (!dragState.active) return;
+    if (dragState.pointerId !== null && event.pointerId !== dragState.pointerId) return;
+    dragState.active = false;
+    dragState.pointerId = null;
+    rootEl.classList.remove('hmb-root--dragging');
+    try {
+      bubbleEl?.releasePointerCapture(event.pointerId);
+    } catch (err) {
+      // Ignore
+    }
+    persistPosition();
+    setTimeout(() => setInfoVisibility(false), 0);
+  }
+
+  function handleResize() {
+    if (!currentPosition) return;
+    setRootPosition(currentPosition.x, currentPosition.y);
+    persistPosition();
+  }
+
+  function applyStoredPosition() {
+    if (!rootEl) return;
+    let stored = null;
+    try {
+      const raw = localStorage.getItem(POSITION_STORAGE_KEY);
+      if (raw) {
+        stored = JSON.parse(raw);
+      }
+    } catch (err) {
+      console.warn('[HMB:overlay] Unable to read stored position:', err);
+    }
+
+    if (stored && Number.isFinite(stored.x) && Number.isFinite(stored.y)) {
+      setRootPosition(stored.x, stored.y);
+      return;
+    }
+
+    rootEl.style.right = '22px';
+    rootEl.style.bottom = '22px';
+    rootEl.style.left = 'auto';
+    rootEl.style.top = 'auto';
+    currentPosition = null;
+  }
+
+  function setRootPosition(x, y) {
+    if (!rootEl) return;
+    const { x: clampedX, y: clampedY } = clampPosition(x, y);
+    rootEl.style.left = `${clampedX}px`;
+    rootEl.style.top = `${clampedY}px`;
+    rootEl.style.right = 'auto';
+    rootEl.style.bottom = 'auto';
+    currentPosition = { x: clampedX, y: clampedY };
+  }
+
+  function clampPosition(x, y) {
+    const width = rootEl?.offsetWidth ?? 0;
+    const height = rootEl?.offsetHeight ?? 0;
+    const maxX = Math.max(MIN_DRAG_MARGIN, window.innerWidth - width - MIN_DRAG_MARGIN);
+    const maxY = Math.max(MIN_DRAG_MARGIN, window.innerHeight - height - MIN_DRAG_MARGIN);
+    return {
+      x: clamp(x, MIN_DRAG_MARGIN, maxX),
+      y: clamp(y, MIN_DRAG_MARGIN, maxY)
+    };
+  }
+
+  function persistPosition() {
+    if (!currentPosition) return;
+    try {
+      localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(currentPosition));
+    } catch (err) {
+      console.warn('[HMB:overlay] Unable to persist position:', err);
+    }
+  }
 
   function computeSignals() {
     const now = Date.now();
@@ -692,30 +1178,7 @@
     }
 
     // Local fallback messages
-    const messages = {
-      focused: [
-        "You're in the zone! Keep going.",
-        "Great focus. You've got this.",
-        "Flowing nicely. Stay with it."
-      ],
-      neutral: [
-        "Taking it steady. All good.",
-        "Finding your rhythm.",
-        "No rush, you're doing fine."
-      ],
-      distracted: [
-        "Lots happening. Let's refocus gently.",
-        "It's okay. One thing at a time.",
-        "Breathe. You can return to center."
-      ],
-      idle: [
-        "Taking a break? That's wise.",
-        "Rest is part of the process.",
-        "Recharging. Come back when ready."
-      ]
-    };
-
-    const pool = messages[label] || messages.neutral;
+    const pool = FALLBACK_MESSAGES[label] || FALLBACK_MESSAGES.neutral;
     let message = pool[Math.floor(Math.random() * pool.length)];
 
     const contextLine = buildContextLine(pageContext, cuesContext);
@@ -731,23 +1194,54 @@
   }
 
   function updateStatus(message) {
-    if (!statusEl) return;
-    const prefix = formatStatusPrefix();
-    statusEl.textContent = message ? `${prefix} — ${message}` : prefix;
+    if (!statusMessageEl || !statusLabelEl) return;
+
+    const label = titleize(state.label || 'neutral');
+    statusLabelEl.textContent = label;
+
+    const safeMessage = message || state.lastStatusMessage || sampleFallbackMessage(state.label);
+    statusMessageEl.textContent = safeMessage;
+
+    if (!message && !state.lastStatusMessage) {
+      state.lastStatusMessage = safeMessage;
+    }
+
+    if (statusMetaEl) {
+      statusMetaEl.textContent = formatStatusMeta();
+    }
+
+    if (infoTitleEl) {
+      const contextTitle = formatContextTitle();
+      infoTitleEl.textContent = contextTitle;
+      infoTitleEl.setAttribute('title', contextTitle);
+    }
   }
 
-  function formatStatusPrefix() {
+  function sampleFallbackMessage(label = 'neutral') {
+    const pool = FALLBACK_MESSAGES[label] || FALLBACK_MESSAGES.neutral;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  function formatStatusMeta() {
     const stats = state.raw.tabStats || {};
-    const parts = [titleize(state.label || 'neutral')];
+    const parts = [];
     parts.push(`10s:${stats.last10 ?? 0}`);
     parts.push(`60s:${stats.last60 ?? state.raw.tabSwitches60s ?? 0}`);
     if (stats.ratePerMin && stats.ratePerMin > 0) {
       parts.push(`${stats.ratePerMin.toFixed(1)} tabs/min`);
     }
-    if (latestPage && latestPage.host) {
-      parts.push(`@ ${latestPage.host.replace(/^www\./, '')}`);
+    const host = latestPage?.host || window.location.hostname;
+    if (host) {
+      parts.push(host.replace(/^www\./, ''));
     }
     return parts.join(' • ');
+  }
+
+  function formatContextTitle() {
+    const contextTitle = (latestPage?.title || '').trim();
+    const fallbackTitle = (document.title || '').trim();
+    const titleText = contextTitle || fallbackTitle || 'Current page';
+    return titleText.length > 140 ? `${titleText.slice(0, 137)}…` : titleText;
   }
 
   function titleize(value = '') {
