@@ -199,7 +199,9 @@
   const faceEl = document.getElementById('hmb-face');
 
   const rootEl = bubble;
-  const POSITION_STORAGE_KEY = 'hmb-planet-position';
+  const POSITION_STORAGE_KEY = 'HMB_PLANET_POSITION';
+  const LEGACY_POSITION_STORAGE_KEY = 'hmb-planet-position';
+  const storageArea = chrome?.storage?.local || null;
   const MIN_DRAG_MARGIN = 18;
   let currentPosition = null;
   const dragState = {
@@ -224,7 +226,7 @@
 
   updateStatus(state.lastStatusMessage);
 
-  applyStoredPosition();
+  await applyStoredPosition();
   setInfoVisibility(false);
 
   if (bubbleEl) {
@@ -1165,21 +1167,15 @@
     }
   }
 
-  function applyStoredPosition() {
+  async function applyStoredPosition() {
     if (!rootEl) return;
-    let stored = null;
-    try {
-      const raw = localStorage.getItem(POSITION_STORAGE_KEY);
-      if (raw) {
-        stored = JSON.parse(raw);
-      }
-    } catch (err) {
-      console.warn('[HMB:overlay] Unable to read stored position:', err);
-    }
+
+    let stored = await loadStoredPosition();
 
     if (stored && Number.isFinite(stored.x) && Number.isFinite(stored.y)) {
-      setRootPosition(stored.x, stored.y, { manual: true });
-      manualOverrideActive = true;
+      const isManual = stored.manual !== false;
+      setRootPosition(stored.x, stored.y, { manual: isManual });
+      manualOverrideActive = isManual;
       return;
     }
 
@@ -1263,19 +1259,108 @@
     }
 
     manualOverrideActive = true;
-    try {
-      localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(currentPosition));
-    } catch (err) {
-      console.warn('[HMB:overlay] Unable to persist position:', err);
-    }
+    const payload = {
+      ...currentPosition,
+      manual: true,
+      timestamp: Date.now()
+    };
+
+    saveStoredPosition(payload);
   }
 
   function clearStoredPosition() {
+    if (storageArea) {
+      try {
+        storageArea.remove(POSITION_STORAGE_KEY, () => {
+          const err = chrome.runtime?.lastError;
+          if (err && err.message) {
+            console.warn('[HMB:overlay] Unable to clear stored position from storage:', err.message);
+          }
+        });
+      } catch (err) {
+        console.warn('[HMB:overlay] Unable to clear stored position from storage:', err);
+      }
+    }
+
     try {
       localStorage.removeItem(POSITION_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_POSITION_STORAGE_KEY);
     } catch (err) {
-      console.warn('[HMB:overlay] Unable to clear stored position:', err);
+      console.warn('[HMB:overlay] Unable to clear stored position cache:', err);
     }
+  }
+
+  async function loadStoredPosition() {
+    if (storageArea) {
+      try {
+        const stored = await new Promise((resolve, reject) => {
+          try {
+            storageArea.get([POSITION_STORAGE_KEY], (items = {}) => {
+              const err = chrome.runtime?.lastError;
+              if (err && err.message) {
+                reject(new Error(err.message));
+                return;
+              }
+              resolve(items[POSITION_STORAGE_KEY]);
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+
+        if (isValidStoredPosition(stored)) {
+          return stored;
+        }
+      } catch (err) {
+        console.warn('[HMB:overlay] Unable to load stored position from storage:', err);
+      }
+    }
+
+    let fallback = null;
+    try {
+      const raw = localStorage.getItem(POSITION_STORAGE_KEY) || localStorage.getItem(LEGACY_POSITION_STORAGE_KEY);
+      if (raw) {
+        fallback = JSON.parse(raw);
+      }
+    } catch (err) {
+      console.warn('[HMB:overlay] Unable to parse legacy stored position:', err);
+    }
+
+    if (fallback && isValidStoredPosition(fallback)) {
+      if (storageArea) {
+        saveStoredPosition({ ...fallback, manual: fallback.manual !== false });
+      }
+      return fallback;
+    }
+
+    return null;
+  }
+
+  function saveStoredPosition(value) {
+    if (storageArea) {
+      try {
+        storageArea.set({ [POSITION_STORAGE_KEY]: value }, () => {
+          const err = chrome.runtime?.lastError;
+          if (err && err.message) {
+            console.warn('[HMB:overlay] Unable to persist position to storage:', err.message);
+          }
+        });
+      } catch (err) {
+        console.warn('[HMB:overlay] Unable to persist position to storage:', err);
+      }
+    }
+
+    try {
+      localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(value));
+    } catch (err) {
+      console.warn('[HMB:overlay] Unable to cache position locally:', err);
+    }
+  }
+
+  function isValidStoredPosition(value) {
+    return Boolean(value)
+      && Number.isFinite(value.x)
+      && Number.isFinite(value.y);
   }
 
   function computeSignals() {
